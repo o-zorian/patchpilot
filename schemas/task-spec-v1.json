@@ -1,0 +1,272 @@
+{
+  "$defs": {
+    "AcceptanceCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "argv": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 3,
+          "title": "Argv",
+          "type": "array"
+        },
+        "timeout_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "argv",
+        "timeout_seconds"
+      ],
+      "title": "AcceptanceCommand",
+      "type": "object"
+    },
+    "AcceptanceSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "commands": {
+          "items": {
+            "$ref": "#/$defs/AcceptanceCommand"
+          },
+          "minItems": 1,
+          "title": "Commands",
+          "type": "array"
+        },
+        "required_tests": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Tests",
+          "type": "array"
+        }
+      },
+      "required": [
+        "commands"
+      ],
+      "title": "AcceptanceSpec",
+      "type": "object"
+    },
+    "BudgetSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "max_steps": {
+          "exclusiveMinimum": 0,
+          "title": "Max Steps",
+          "type": "integer"
+        },
+        "max_input_tokens": {
+          "exclusiveMinimum": 0,
+          "title": "Max Input Tokens",
+          "type": "integer"
+        },
+        "max_output_tokens": {
+          "exclusiveMinimum": 0,
+          "title": "Max Output Tokens",
+          "type": "integer"
+        },
+        "max_cost_usd": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Max Cost Usd"
+        },
+        "max_wall_time_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Max Wall Time Seconds",
+          "type": "integer"
+        },
+        "max_changed_files": {
+          "exclusiveMinimum": 0,
+          "title": "Max Changed Files",
+          "type": "integer"
+        },
+        "max_patch_lines": {
+          "exclusiveMinimum": 0,
+          "title": "Max Patch Lines",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_steps",
+        "max_input_tokens",
+        "max_output_tokens",
+        "max_cost_usd",
+        "max_wall_time_seconds",
+        "max_changed_files",
+        "max_patch_lines"
+      ],
+      "title": "BudgetSpec",
+      "type": "object"
+    },
+    "ExecutionSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "network": {
+          "const": false,
+          "default": false,
+          "title": "Network",
+          "type": "boolean"
+        },
+        "cpu_limit": {
+          "default": 2,
+          "exclusiveMinimum": 0,
+          "title": "Cpu Limit",
+          "type": "integer"
+        },
+        "memory_limit_mb": {
+          "default": 1024,
+          "exclusiveMinimum": 0,
+          "title": "Memory Limit Mb",
+          "type": "integer"
+        }
+      },
+      "title": "ExecutionSpec",
+      "type": "object"
+    },
+    "MetadataSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "difficulty": {
+          "anyOf": [
+            {
+              "enum": [
+                "easy",
+                "medium",
+                "hard"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Difficulty"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "title": "MetadataSpec",
+      "type": "object"
+    },
+    "RepositorySpec": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "base_ref": {
+          "default": "HEAD",
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Base Ref",
+          "type": "string"
+        },
+        "language": {
+          "const": "python",
+          "title": "Language",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "language"
+      ],
+      "title": "RepositorySpec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": "1",
+      "title": "Version",
+      "type": "string"
+    },
+    "id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title"
+    },
+    "repository": {
+      "$ref": "#/$defs/RepositorySpec"
+    },
+    "goal": {
+      "maxLength": 20000,
+      "minLength": 1,
+      "title": "Goal",
+      "type": "string"
+    },
+    "allowed_paths": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Allowed Paths",
+      "type": "array"
+    },
+    "denied_paths": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Denied Paths",
+      "type": "array"
+    },
+    "acceptance": {
+      "$ref": "#/$defs/AcceptanceSpec"
+    },
+    "budget": {
+      "$ref": "#/$defs/BudgetSpec"
+    },
+    "execution": {
+      "$ref": "#/$defs/ExecutionSpec"
+    },
+    "metadata": {
+      "$ref": "#/$defs/MetadataSpec"
+    }
+  },
+  "required": [
+    "version",
+    "id",
+    "repository",
+    "goal",
+    "allowed_paths",
+    "acceptance",
+    "budget"
+  ],
+  "title": "TaskSpec",
+  "type": "object"
+}
