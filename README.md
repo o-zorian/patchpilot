@@ -1,8 +1,9 @@
 # PatchPilot
 
 PatchPilot is a controlled and auditable coding-agent harness. This repository currently
-contains milestone M0 only: the versioned task protocol, CLI skeleton, configuration and
-structured logging, Run state machine, and SQLite persistence.
+contains milestones M0 and M1: the versioned task protocol, CLI and persistence skeleton,
+independent trusted-local Workspaces, strict path policy, structured file/search/patch/diff
+tools, and the Python pytest command profile.
 
 ## M0 quick start
 
@@ -20,11 +21,20 @@ the Python P0 acceptance profile (`python -m pytest` plus restricted selectors).
 Run validates and snapshots the TaskSpec, applies pending SQLite migrations, and persists a
 Run in `pending`; it does not invoke a model or execute repository code.
 
-## M0 security boundary
+## M1 controlled local tools
 
-M0 never executes TaskSpec commands, calls a model API, or modifies the target repository.
-It rejects absolute/traversing glob patterns, requires `.git/**` in denied paths, enforces
-fixed Python acceptance-command syntax, and checks all user budgets against configurable
-system hard limits. Workspace isolation and executable tools begin in M1 and are deliberately
-not present here.
+`WorkspaceManager` creates an independent clone under `WORKSPACE_ROOT` after confirming the
+source repository is clean. Every tool call resolves paths again; absolute paths, traversal,
+Git metadata, common Secret files, out-of-scope writes, and escaping symbolic links are
+rejected. Patch application supports atomic text create/update/delete operations and checks
+the TaskSpec file/line budgets before and after application.
 
+The local Python profile executes only application-defined `python -m pytest` argv arrays.
+It never uses a shell, strips model/API credentials from the child environment, caps output,
+and terminates the complete process tree on timeout. This trusted-local runner is intended
+only for project-owned fixtures and benchmarks. It does not claim Docker-grade network,
+filesystem, CPU, or memory isolation; unknown repositories remain out of scope until the
+Docker sandbox milestone.
+
+M1 does not include a model client, Agent Loop, event stream, Quality Gate, API, Worker, Go
+profile, or Benchmark runner.

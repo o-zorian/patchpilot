@@ -28,7 +28,7 @@ from patchpilot.persistence.repositories import RunNotFoundError, RunRepository
 app = typer.Typer(no_args_is_help=True, help="PatchPilot controlled coding-agent harness.")
 task_app = typer.Typer(no_args_is_help=True, help="Validate and inspect TaskSpec documents.")
 run_app = typer.Typer(no_args_is_help=True, help="Create and inspect persisted Run records.")
-db_app = typer.Typer(no_args_is_help=True, help="Manage the M0 SQLite database.")
+db_app = typer.Typer(no_args_is_help=True, help="Manage the PatchPilot SQLite database.")
 app.add_typer(task_app, name="task")
 app.add_typer(run_app, name="run")
 app.add_typer(db_app, name="db")

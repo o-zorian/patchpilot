@@ -9,7 +9,7 @@ from sqlalchemy.engine import make_url
 
 
 class SettingsError(ValueError):
-    """Raised when runtime settings are incompatible with M0."""
+    """Raised when runtime settings are incompatible with the current milestone."""
 
 
 class AppSettings(BaseSettings):
@@ -25,6 +25,11 @@ class AppSettings(BaseSettings):
     artifact_root: Path = Path("./artifacts")
     workspace_root: Path = Path("./workspaces")
     log_level: str = "INFO"
+    tool_output_max_chars: int = Field(default=20_000, gt=0)
+    tool_list_max_files: int = Field(default=1_000, gt=0)
+    tool_search_max_results: int = Field(default=100, gt=0)
+    tool_read_max_lines: int = Field(default=400, gt=0, le=400)
+    tool_max_file_bytes: int = Field(default=1_048_576, gt=0)
 
     hard_max_steps: int = Field(default=30, gt=0)
     hard_max_input_tokens: int = Field(default=250_000, gt=0)
@@ -40,9 +45,9 @@ class AppSettings(BaseSettings):
     def sqlite_database_path(self) -> Path:
         url = make_url(self.database_url)
         if url.get_backend_name() != "sqlite":
-            raise SettingsError("M0 supports only SQLite DATABASE_URL values")
+            raise SettingsError("the current CLI supports only SQLite DATABASE_URL values")
         if not url.database or url.database == ":memory:":
-            raise SettingsError("M0 runtime commands require a file-backed SQLite database")
+            raise SettingsError("runtime commands require a file-backed SQLite database")
         return Path(url.database).expanduser().resolve()
 
     def ensure_runtime_directories(self) -> None:

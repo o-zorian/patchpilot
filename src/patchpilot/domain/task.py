@@ -37,15 +37,9 @@ class AcceptanceCommand(BaseModel):
     @classmethod
     def validate_python_pytest_command(cls, argv: list[str]) -> list[str]:
         if argv[:3] != ["python", "-m", "pytest"]:
-            raise ValueError("M0 accepts only the Python P0 command: python -m pytest")
+            raise ValueError("the Python profile accepts only: python -m pytest")
         for selector in argv[3:]:
-            if (
-                not selector
-                or selector.startswith("-")
-                or not _PYTEST_SELECTOR_PATTERN.fullmatch(selector)
-                or ".." in PurePosixPath(selector.replace("\\", "/")).parts
-            ):
-                raise ValueError(f"unsafe or unsupported pytest selector: {selector!r}")
+            validate_pytest_selector(selector)
         return argv
 
 
@@ -112,6 +106,19 @@ def _validate_relative_pattern(pattern: str) -> str:
         or ".." in path.parts
     ):
         raise ValueError(f"path pattern must be relative and cannot traverse: {pattern!r}")
+    return normalized
+
+
+def validate_pytest_selector(selector: str) -> str:
+    normalized = selector.replace("\\", "/")
+    if (
+        not normalized
+        or normalized.startswith(("-", "/", ":"))
+        or re.match(r"^[A-Za-z]:", normalized)
+        or not _PYTEST_SELECTOR_PATTERN.fullmatch(normalized)
+        or ".." in PurePosixPath(normalized).parts
+    ):
+        raise ValueError(f"unsafe or unsupported pytest selector: {selector!r}")
     return normalized
 
 
