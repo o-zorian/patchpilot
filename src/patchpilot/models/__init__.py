@@ -1,0 +1,1 @@
+"""Model protocols and adapters."""

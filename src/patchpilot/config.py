@@ -3,9 +3,11 @@ from __future__ import annotations
 from decimal import Decimal
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
+
+from patchpilot.models.base import ModelConfig
 
 
 class SettingsError(ValueError):
@@ -31,6 +33,16 @@ class AppSettings(BaseSettings):
     tool_read_max_lines: int = Field(default=400, gt=0, le=400)
     tool_max_file_bytes: int = Field(default=1_048_576, gt=0)
 
+    model_base_url: str = "https://api.openai.com/v1"
+    model_api_key: SecretStr | None = None
+    model_name: str | None = None
+    model_temperature: float = Field(default=0, ge=0, le=2)
+    model_max_tokens: int = Field(default=4_096, gt=0)
+    model_request_timeout_seconds: float = Field(default=60, gt=0)
+    model_max_retries: int = Field(default=3, ge=0, le=3)
+    model_input_cost_per_million_usd: Decimal = Field(default=Decimal("0"), ge=0)
+    model_output_cost_per_million_usd: Decimal = Field(default=Decimal("0"), ge=0)
+
     hard_max_steps: int = Field(default=30, gt=0)
     hard_max_input_tokens: int = Field(default=250_000, gt=0)
     hard_max_output_tokens: int = Field(default=64_000, gt=0)
@@ -54,3 +66,20 @@ class AppSettings(BaseSettings):
         self.sqlite_database_path().parent.mkdir(parents=True, exist_ok=True)
         self.artifact_root.expanduser().resolve().mkdir(parents=True, exist_ok=True)
         self.workspace_root.expanduser().resolve().mkdir(parents=True, exist_ok=True)
+
+    def real_model_config(self) -> ModelConfig:
+        if not self.model_name:
+            raise SettingsError("MODEL_NAME is required for the real model client")
+        if self.model_api_key is None or not self.model_api_key.get_secret_value():
+            raise SettingsError("MODEL_API_KEY is required for the real model client")
+        return ModelConfig(
+            base_url=self.model_base_url,
+            api_key=self.model_api_key,
+            model=self.model_name,
+            temperature=self.model_temperature,
+            max_tokens=self.model_max_tokens,
+            request_timeout_seconds=self.model_request_timeout_seconds,
+            max_retries=self.model_max_retries,
+            input_cost_per_million_usd=self.model_input_cost_per_million_usd,
+            output_cost_per_million_usd=self.model_output_cost_per_million_usd,
+        )

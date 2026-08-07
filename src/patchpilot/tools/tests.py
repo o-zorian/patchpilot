@@ -24,7 +24,12 @@ class RunTestsTool:
         self.context = context
         self.profile = PythonProfile(context.task_spec)
 
-    def execute(self, arguments: RunTestsInput) -> ToolResult:
+    def execute(
+        self,
+        arguments: RunTestsInput,
+        *,
+        timeout_seconds_override: float | None = None,
+    ) -> ToolResult:
         started = time.monotonic()
         try:
             command = self.profile.resolve(arguments.profile_command_id, arguments.selector)
@@ -39,11 +44,16 @@ class RunTestsTool:
                 return path_failure(self.name, exc, started=started)
             return failure(self.name, "INVALID_SELECTOR", str(exc), started=started)
 
+        effective_timeout = (
+            command.timeout_seconds
+            if timeout_seconds_override is None
+            else min(command.timeout_seconds, max(0.001, timeout_seconds_override))
+        )
         try:
             result = run_argv(
                 command.argv,
                 cwd=self.context.workspace.path,
-                timeout_seconds=command.timeout_seconds,
+                timeout_seconds=effective_timeout,
                 output_max_chars=self.context.limits.output_max_chars,
                 environment={"PYTEST_ADDOPTS": "--color=no"},
             )
@@ -68,7 +78,7 @@ class RunTestsTool:
             return ToolResult(
                 ok=False,
                 tool=self.name,
-                summary=f"tests timed out after {command.timeout_seconds} seconds",
+                summary=f"tests timed out after {effective_timeout:g} seconds",
                 data=data,
                 error={
                     "code": "TIMEOUT",

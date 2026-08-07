@@ -1,9 +1,9 @@
 # PatchPilot
 
 PatchPilot is a controlled and auditable coding-agent harness. This repository currently
-contains milestones M0 and M1: the versioned task protocol, CLI and persistence skeleton,
-independent trusted-local Workspaces, strict path policy, structured file/search/patch/diff
-tools, and the Python pytest command profile.
+contains milestones M0 through M2: the versioned task protocol and persistence skeleton,
+independent trusted-local Workspaces, controlled tools, an OpenAI-compatible model boundary,
+offline scripted models, and a project-owned structured Agent Loop.
 
 ## M0 quick start
 
@@ -36,5 +36,20 @@ only for project-owned fixtures and benchmarks. It does not claim Docker-grade n
 filesystem, CPU, or memory isolation; unknown repositories remain out of scope until the
 Docker sandbox milestone.
 
-M1 does not include a model client, Agent Loop, event stream, Quality Gate, API, Worker, Go
-profile, or Benchmark runner.
+## M2 Agent Loop
+
+The Agent Loop builds a bounded task prompt, exposes only registered Pydantic tool schemas,
+feeds every structured tool result back to the model, and stops on a `finish` request,
+repeated invalid calls, a model failure, or a hard step, token, cost, or wall-time budget.
+Transient 429, 5xx, and timeout failures use bounded exponential backoff with jitter. Model
+and tool payloads are not copied into events; event records contain identifiers, hashes,
+small summaries, usage, cost, and timing data.
+
+`ScriptedModelClient` and `FakeModelClient` perform no network I/O and are used by the test
+suite. `OpenAICompatibleClient` is the explicit production adapter and requires both
+`MODEL_NAME` and `MODEL_API_KEY`. Each run can write append-only `events.jsonl` and the same
+semantic events to SQLite, with normalized model-call and tool-call trace rows.
+
+M2 deliberately stops at `finish_requested`. It does not mark a run passed, execute a
+Quality Gate, produce final reports, or add API, Worker, Docker, Go, or Benchmark features;
+those belong to later milestones.
