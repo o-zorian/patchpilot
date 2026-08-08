@@ -1,9 +1,9 @@
 # PatchPilot
 
 PatchPilot is a controlled and auditable coding-agent harness. This repository currently
-contains milestones M0 through M2: the versioned task protocol and persistence skeleton,
+contains milestones M0 through M3: the versioned task protocol and persistence skeleton,
 independent trusted-local Workspaces, controlled tools, an OpenAI-compatible model boundary,
-offline scripted models, and a project-owned structured Agent Loop.
+offline scripted models, a project-owned Agent Loop, and deterministic Quality Gate reports.
 
 ## M0 quick start
 
@@ -50,6 +50,24 @@ suite. `OpenAICompatibleClient` is the explicit production adapter and requires 
 `MODEL_NAME` and `MODEL_API_KEY`. Each run can write append-only `events.jsonl` and the same
 semantic events to SQLite, with normalized model-call and tool-call trace rows.
 
-M2 deliberately stops at `finish_requested`. It does not mark a run passed, execute a
-Quality Gate, produce final reports, or add API, Worker, Docker, Go, or Benchmark features;
-those belong to later milestones.
+Without a configured Quality Gate, the M2 loop still stops safely at `finish_requested` and
+never marks a run passed.
+
+## M3 Quality Gate and reports
+
+The M3 runner attaches a deterministic Quality Gate to the same Agent Loop. A `finish` call
+causes the application—not the model—to recompute the complete Git diff from the Workspace
+baseline, validate every tracked and untracked path, enforce file and line budgets, run all
+configured acceptance commands, and verify required test names from pytest JUnit output.
+Recoverable `NO_PATCH`, `TEST_FAILURE`, `REGRESSION`, and `REQUIRED_TEST_NOT_RUN` results can
+be returned to the Agent at most twice. Scope, sandbox, timeout, and hard-budget failures do
+not loop indefinitely.
+
+Every terminal M3 execution writes `final.patch`, `test.log`, `scorecard.json`, `report.md`,
+`report.html`, and `events.jsonl` below its run-scoped artifact directory. Artifact writes are
+atomic and indexed in SQLite with SHA-256 and byte size. Reports contain deterministic check
+results and bounded summaries; full patch and test output stay in artifacts rather than event
+payloads.
+
+M3 does not add FastAPI, PostgreSQL, Redis, asynchronous Workers, SSE, cancellation, Docker,
+Go, or Benchmark execution. Trusted-local mode remains limited to project-owned fixtures.

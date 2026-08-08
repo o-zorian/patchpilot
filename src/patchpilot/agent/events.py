@@ -26,6 +26,9 @@ class EventType(StrEnum):
     TOOL_STARTED = "tool.started"
     TOOL_COMPLETED = "tool.completed"
     TOOL_FAILED = "tool.failed"
+    QUALITY_GATE_STARTED = "quality_gate.started"
+    QUALITY_GATE_FAILED = "quality_gate.failed"
+    QUALITY_GATE_PASSED = "quality_gate.passed"
     RUN_COMPLETED = "run.completed"
     RUN_FAILED = "run.failed"
 
@@ -157,6 +160,12 @@ class EventEmitter:
         self._sinks = tuple(sinks)
         self._sequence = 0
         self._lock = asyncio.Lock()
+
+    def writes_jsonl_to(self, path: Path) -> bool:
+        expected = path.expanduser().resolve()
+        return any(
+            isinstance(sink, JsonlEventSink) and sink.path == expected for sink in self._sinks
+        )
 
     async def emit(
         self,

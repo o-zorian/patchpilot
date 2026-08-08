@@ -21,6 +21,8 @@ class GitDiffInput(BaseModel):
 @dataclass(frozen=True, slots=True)
 class DiffSnapshot:
     diff: str
+    changed_paths: tuple[str, ...]
+    binary_files: tuple[str, ...]
     changed_files: int
     added_lines: int
     deleted_lines: int
@@ -41,26 +43,46 @@ def _git(
     )
 
 
-def collect_diff(context: ToolContext, path: str | None = None) -> DiffSnapshot:
+def collect_diff(
+    context: ToolContext,
+    path: str | None = None,
+    *,
+    output_max_chars: int | None = None,
+) -> DiffSnapshot:
     path_arguments = [] if path is None else ["--", path]
+    maximum_output = output_max_chars or context.limits.output_max_chars
     tracked = _git(
         context,
         [
             "diff",
             "--no-ext-diff",
             "--no-color",
+            "--no-renames",
             "--src-prefix=a/",
             "--dst-prefix=b/",
+            context.workspace.baseline_commit,
             *path_arguments,
         ],
+        output_max_chars=maximum_output,
     )
     if tracked.return_code != 0:
         raise OSError(tracked.stderr or "git diff failed")
-    numstat = _git(context, ["diff", "--numstat", *path_arguments])
+    numstat = _git(
+        context,
+        [
+            "diff",
+            "--no-renames",
+            "--numstat",
+            context.workspace.baseline_commit,
+            *path_arguments,
+        ],
+        output_max_chars=maximum_output,
+    )
     if numstat.return_code != 0:
         raise OSError(numstat.stderr or "git diff --numstat failed")
 
     changed: set[str] = set()
+    binary_files: set[str] = set()
     added_lines = 0
     deleted_lines = 0
     for row in numstat.stdout.splitlines():
@@ -71,8 +93,12 @@ def collect_diff(context: ToolContext, path: str | None = None) -> DiffSnapshot:
         changed.add(logical)
         if added.isdigit():
             added_lines += int(added)
+        else:
+            binary_files.add(logical)
         if deleted.isdigit():
             deleted_lines += int(deleted)
+        else:
+            binary_files.add(logical)
 
     untracked_arguments = ["ls-files", "--others", "--exclude-standard", "-z"]
     if path is not None:
@@ -98,6 +124,7 @@ def collect_diff(context: ToolContext, path: str | None = None) -> DiffSnapshot:
         try:
             content = resolved.candidate_path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
+            binary_files.add(logical)
             diff_parts.append(f"diff --git a/{logical} b/{logical}\nBinary files differ\n")
             continue
         lines = content.splitlines(keepends=True)
@@ -115,11 +142,13 @@ def collect_diff(context: ToolContext, path: str | None = None) -> DiffSnapshot:
         diff_parts.append(header + generated)
 
     combined = "".join(diff_parts)
-    if len(combined) > context.limits.output_max_chars:
-        combined = combined[: context.limits.output_max_chars]
+    if len(combined) > maximum_output:
+        combined = combined[:maximum_output]
         truncated = True
     return DiffSnapshot(
         diff=combined,
+        changed_paths=tuple(sorted(changed)),
+        binary_files=tuple(sorted(binary_files)),
         changed_files=len(changed),
         added_lines=added_lines,
         deleted_lines=deleted_lines,

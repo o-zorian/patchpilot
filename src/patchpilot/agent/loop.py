@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import random
 import time
 from collections.abc import Awaitable, Callable
@@ -15,6 +16,8 @@ from patchpilot.agent.budget import BudgetSnapshot, BudgetStopReason, BudgetTrac
 from patchpilot.agent.events import EventEmitter, EventType
 from patchpilot.agent.prompts import PROMPT_VERSION, build_initial_messages
 from patchpilot.agent.registry import FinishInput, ToolRegistry
+from patchpilot.domain.run import RunStatus
+from patchpilot.domain.scorecard import QualityResult, Scorecard, ScorecardMetrics
 from patchpilot.models.base import (
     Message,
     MessageRole,
@@ -25,11 +28,14 @@ from patchpilot.models.base import (
     ModelTimeoutError,
     ToolCall,
 )
+from patchpilot.quality.gate import QualityGate
 from patchpilot.tools.base import ToolContext
 
 
 class AgentLoopStatus(StrEnum):
     FINISH_REQUESTED = "finish_requested"
+    PASSED = "passed"
+    TIMEOUT = "timeout"
     BUDGET_EXCEEDED = "budget_exceeded"
     FAILED = "failed"
 
@@ -57,6 +63,29 @@ class AgentMetrics(BaseModel):
             wall_time_seconds=snapshot.wall_time_seconds,
         )
 
+    def to_scorecard_metrics(self) -> ScorecardMetrics:
+        return ScorecardMetrics(
+            steps=self.steps,
+            model_calls=self.model_calls,
+            tool_calls=self.tool_calls,
+            prompt_tokens=self.prompt_tokens,
+            completion_tokens=self.completion_tokens,
+            estimated_cost_usd=self.estimated_cost_usd,
+            wall_time_seconds=self.wall_time_seconds,
+        )
+
+    @classmethod
+    def from_scorecard_metrics(cls, metrics: ScorecardMetrics) -> AgentMetrics:
+        return cls(
+            steps=metrics.steps,
+            model_calls=metrics.model_calls,
+            tool_calls=metrics.tool_calls,
+            prompt_tokens=metrics.prompt_tokens,
+            completion_tokens=metrics.completion_tokens,
+            estimated_cost_usd=metrics.estimated_cost_usd,
+            wall_time_seconds=metrics.wall_time_seconds,
+        )
+
 
 class AgentLoopResult(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -66,6 +95,7 @@ class AgentLoopResult(BaseModel):
     result_code: str
     error_code: str | None = None
     finish_request: FinishInput | None = None
+    scorecard: Scorecard | None = None
     metrics: AgentMetrics
     prompt_version: str = PROMPT_VERSION
 
@@ -93,6 +123,7 @@ class AgentLoop:
         sleep: Sleep = asyncio.sleep,
         random_source: random.Random | None = None,
         clock: Callable[[], float] = time.monotonic,
+        quality_gate: QualityGate | None = None,
     ) -> None:
         self.model_client = model_client
         self.model_config = model_config
@@ -102,6 +133,7 @@ class AgentLoop:
         self.sleep = sleep
         self.random = random_source or random.Random()
         self.budget = BudgetTracker(tool_context.task_spec.budget, model_config, clock=clock)
+        self.quality_gate = quality_gate
 
     async def run(self, run_id: UUID) -> AgentLoopResult:
         if run_id != self.events.run_id:
@@ -125,8 +157,11 @@ class AgentLoop:
         )
         invalid_fingerprint: str | None = None
         repeated_invalid_calls = 0
+        gate_attempts = 0
+        gate_feedbacks = 0
 
         while True:
+            gate_feedback_received = False
             stop_reason = self.budget.before_step()
             if stop_reason is not None:
                 return await self._budget_result(run_id, stop_reason)
@@ -247,6 +282,100 @@ class AgentLoop:
 
                 if execution.finish_request is not None:
                     metrics = AgentMetrics.from_snapshot(self.budget.snapshot())
+                    if self.quality_gate is not None:
+                        gate_attempts += 1
+                        outcome = await self.quality_gate.evaluate(
+                            metrics.to_scorecard_metrics(),
+                            attempt=gate_attempts,
+                            remaining_wall_time_seconds=(self.budget.remaining_wall_time_seconds),
+                        )
+                        gate_metrics = AgentMetrics.from_scorecard_metrics(
+                            outcome.scorecard.metrics
+                        )
+                        post_gate_budget = self.budget.check_non_step_limits()
+                        if post_gate_budget is not None:
+                            return await self._budget_result(run_id, post_gate_budget)
+                        if outcome.passed:
+                            await self.events.emit(
+                                EventType.RUN_COMPLETED,
+                                {
+                                    "status": AgentLoopStatus.PASSED.value,
+                                    "result_code": QualityResult.PASSED.value,
+                                    "steps": metrics.steps,
+                                    "tool_calls": metrics.tool_calls,
+                                    "gate_attempts": gate_attempts,
+                                },
+                            )
+                            await self.quality_gate.finalize_run(
+                                RunStatus.PASSED,
+                                outcome.scorecard,
+                            )
+                            await self.quality_gate.finalize_event_log()
+                            return AgentLoopResult(
+                                run_id=run_id,
+                                status=AgentLoopStatus.PASSED,
+                                result_code=QualityResult.PASSED.value,
+                                finish_request=execution.finish_request,
+                                scorecard=outcome.scorecard,
+                                metrics=gate_metrics,
+                            )
+                        if (
+                            outcome.recoverable
+                            and outcome.feedback is not None
+                            and gate_feedbacks < 2
+                        ):
+                            gate_feedbacks += 1
+                            messages.append(
+                                Message(
+                                    role=MessageRole.USER,
+                                    content=json.dumps(
+                                        outcome.feedback,
+                                        ensure_ascii=False,
+                                        sort_keys=True,
+                                    ),
+                                )
+                            )
+                            invalid_fingerprint = None
+                            repeated_invalid_calls = 0
+                            gate_feedback_received = True
+                            break
+                        status = (
+                            AgentLoopStatus.TIMEOUT
+                            if outcome.result == QualityResult.TIMEOUT
+                            else AgentLoopStatus.BUDGET_EXCEEDED
+                            if outcome.result == QualityResult.BUDGET_EXCEEDED
+                            else AgentLoopStatus.FAILED
+                        )
+                        await self.events.emit(
+                            EventType.RUN_FAILED,
+                            {
+                                "status": status.value,
+                                "result_code": outcome.result.value,
+                                "error_code": None,
+                                "steps": metrics.steps,
+                                "gate_attempts": gate_attempts,
+                            },
+                        )
+                        run_status = (
+                            RunStatus.TIMEOUT
+                            if status == AgentLoopStatus.TIMEOUT
+                            else RunStatus.BUDGET_EXCEEDED
+                            if status == AgentLoopStatus.BUDGET_EXCEEDED
+                            else RunStatus.FAILED
+                        )
+                        await self.quality_gate.finalize_run(
+                            run_status,
+                            outcome.scorecard,
+                        )
+                        await self.quality_gate.finalize_event_log()
+                        return AgentLoopResult(
+                            run_id=run_id,
+                            status=status,
+                            result_code=outcome.result.value,
+                            finish_request=execution.finish_request,
+                            scorecard=outcome.scorecard,
+                            metrics=gate_metrics,
+                        )
                     await self.events.emit(
                         EventType.RUN_COMPLETED,
                         {
@@ -267,6 +396,8 @@ class AgentLoop:
                 wall_stop = self.budget.check_non_step_limits()
                 if wall_stop is not None:
                     return await self._budget_result(run_id, wall_stop)
+            if gate_feedback_received:
+                continue
 
     async def _request_model(self, messages: list[Message]) -> tuple[ModelResponse, int]:
         max_attempts = self.model_config.max_retries + 1
@@ -354,6 +485,13 @@ class AgentLoop:
         reason: BudgetStopReason,
     ) -> AgentLoopResult:
         metrics = AgentMetrics.from_snapshot(self.budget.snapshot())
+        scorecard = None
+        if self.quality_gate is not None:
+            scorecard = await self.quality_gate.finalize_terminal(
+                QualityResult.BUDGET_EXCEEDED,
+                metrics.to_scorecard_metrics(),
+                summary=f"hard budget exhausted: {reason.value}",
+            )
         await self.events.emit(
             EventType.RUN_FAILED,
             {
@@ -363,11 +501,21 @@ class AgentLoop:
                 "steps": metrics.steps,
             },
         )
+        if self.quality_gate is not None:
+            if scorecard is None:
+                raise RuntimeError("Quality Gate did not create a budget Scorecard")
+            await self.quality_gate.finalize_run(
+                RunStatus.BUDGET_EXCEEDED,
+                scorecard,
+                error_code=reason.value,
+            )
+            await self.quality_gate.finalize_event_log()
         return AgentLoopResult(
             run_id=run_id,
             status=AgentLoopStatus.BUDGET_EXCEEDED,
             result_code="BUDGET_EXCEEDED",
             error_code=reason.value,
+            scorecard=scorecard,
             metrics=metrics,
         )
 
@@ -379,6 +527,17 @@ class AgentLoop:
         error_code: str,
     ) -> AgentLoopResult:
         metrics = AgentMetrics.from_snapshot(self.budget.snapshot())
+        try:
+            quality_result = QualityResult(result_code)
+        except ValueError:
+            quality_result = QualityResult.SYSTEM_ERROR
+        scorecard = None
+        if self.quality_gate is not None:
+            scorecard = await self.quality_gate.finalize_terminal(
+                quality_result,
+                metrics.to_scorecard_metrics(),
+                summary=f"Agent Loop terminated with {result_code}: {error_code}",
+            )
         await self.events.emit(
             EventType.RUN_FAILED,
             {
@@ -388,11 +547,21 @@ class AgentLoop:
                 "steps": metrics.steps,
             },
         )
+        if self.quality_gate is not None:
+            if scorecard is None:
+                raise RuntimeError("Quality Gate did not create a failure Scorecard")
+            await self.quality_gate.finalize_run(
+                RunStatus.FAILED,
+                scorecard,
+                error_code=error_code,
+            )
+            await self.quality_gate.finalize_event_log()
         return AgentLoopResult(
             run_id=run_id,
             status=AgentLoopStatus.FAILED,
             result_code=result_code,
             error_code=error_code,
+            scorecard=scorecard,
             metrics=metrics,
         )
 

@@ -1,0 +1,1 @@
+"""Deterministic PatchPilot report rendering."""

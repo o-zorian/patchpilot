@@ -6,7 +6,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from patchpilot.domain.run import Run, RunStrategy
+from patchpilot.domain.run import Run, RunActor, RunStatus, RunStrategy
+from patchpilot.domain.scorecard import ScorecardMetrics
 from patchpilot.domain.task import TaskSpec
 from patchpilot.persistence.models import RunRow, TaskRow
 
@@ -54,6 +55,53 @@ class RunRepository:
         if row is None:
             raise RunNotFoundError(f"Run not found: {run_id}")
         return self._from_row(row)
+
+    async def finalize(
+        self,
+        run_id: UUID,
+        *,
+        status: RunStatus,
+        workspace_id: str,
+        metrics: ScorecardMetrics,
+        result_code: str,
+        error_code: str | None = None,
+    ) -> Run:
+        if not status.is_terminal:
+            raise ValueError("persisted Run finalization requires a terminal status")
+        row = await self.session.scalar(select(RunRow).where(RunRow.id == str(run_id)))
+        if row is None:
+            raise RunNotFoundError(f"Run not found: {run_id}")
+        run = self._from_row(row)
+        if run.status.is_terminal:
+            if run.status != status or run.result_code != result_code:
+                raise ValueError("cannot replace a persisted Run terminal outcome")
+            return run
+        if run.status in {RunStatus.PENDING, RunStatus.PREPARING}:
+            run = run.transition(RunStatus.RUNNING, actor=RunActor.WORKER)
+        run = run.transition(status, actor=RunActor.SYSTEM)
+        run = run.model_copy(
+            update={
+                "workspace_id": workspace_id,
+                "step_count": metrics.steps,
+                "prompt_tokens": metrics.prompt_tokens,
+                "completion_tokens": metrics.completion_tokens,
+                "estimated_cost_usd": metrics.estimated_cost_usd,
+                "result_code": result_code,
+                "error_code": error_code,
+            }
+        )
+        row.status = run.status.value
+        row.workspace_id = run.workspace_id
+        row.step_count = run.step_count
+        row.prompt_tokens = run.prompt_tokens
+        row.completion_tokens = run.completion_tokens
+        row.estimated_cost_usd = run.estimated_cost_usd
+        row.result_code = run.result_code
+        row.error_code = run.error_code
+        row.started_at = run.started_at
+        row.finished_at = run.finished_at
+        await self.session.commit()
+        return run
 
     @staticmethod
     def _to_row(run: Run) -> RunRow:
