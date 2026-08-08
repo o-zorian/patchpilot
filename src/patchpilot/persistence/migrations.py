@@ -11,5 +11,6 @@ def upgrade_database(database_url: str) -> None:
     config = Config(str(project_root / "alembic.ini"))
     config.set_main_option("script_location", str(project_root / "migrations"))
     migration_url = database_url.replace("sqlite+aiosqlite:", "sqlite:", 1)
+    migration_url = migration_url.replace("postgresql+asyncpg:", "postgresql+psycopg:", 1)
     config.set_main_option("sqlalchemy.url", migration_url.replace("%", "%%"))
     command.upgrade(config, "head")

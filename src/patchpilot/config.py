@@ -24,6 +24,17 @@ class AppSettings(BaseSettings):
 
     app_env: str = "development"
     database_url: str = "sqlite+aiosqlite:///./data/patchpilot.db"
+    postgres_database_url: str = (
+        "postgresql+asyncpg://patchpilot:patchpilot@localhost:5432/patchpilot"
+    )
+    redis_url: str = "redis://localhost:6379/0"
+    redis_queue_name: str = "patchpilot:runs"
+    service_owner_id: str = Field(default="local", min_length=1, max_length=128)
+    api_host: str = "127.0.0.1"
+    api_port: int = Field(default=8_000, gt=0, le=65_535)
+    worker_poll_seconds: float = Field(default=1, gt=0)
+    worker_heartbeat_seconds: float = Field(default=5, gt=0)
+    worker_cancel_poll_seconds: float = Field(default=0.1, gt=0)
     artifact_root: Path = Path("./artifacts")
     workspace_root: Path = Path("./workspaces")
     log_level: str = "INFO"
@@ -62,8 +73,15 @@ class AppSettings(BaseSettings):
             raise SettingsError("runtime commands require a file-backed SQLite database")
         return Path(url.database).expanduser().resolve()
 
+    def database_backend(self) -> str:
+        backend = make_url(self.database_url).get_backend_name()
+        if backend not in {"sqlite", "postgresql"}:
+            raise SettingsError("DATABASE_URL must use SQLite or PostgreSQL")
+        return backend
+
     def ensure_runtime_directories(self) -> None:
-        self.sqlite_database_path().parent.mkdir(parents=True, exist_ok=True)
+        if self.database_backend() == "sqlite":
+            self.sqlite_database_path().parent.mkdir(parents=True, exist_ok=True)
         self.artifact_root.expanduser().resolve().mkdir(parents=True, exist_ok=True)
         self.workspace_root.expanduser().resolve().mkdir(parents=True, exist_ok=True)
 

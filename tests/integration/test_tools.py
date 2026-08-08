@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from pathlib import Path
 from typing import Any
 
+from patchpilot.domain.cancellation import CancellationToken
 from patchpilot.domain.task import TaskSpec
 from patchpilot.sandbox.workspace import WorkspaceManager
 from patchpilot.tools.base import ToolContext, ToolLimits
@@ -271,4 +273,49 @@ def test_test_timeout_terminates_process_tree(
     assert result.ok is False
     assert result.error.code == "TIMEOUT"
     assert result.data["timed_out"] is True
+    assert not marker.exists(), json.loads(marker.read_text()) if marker.exists() else ""
+
+
+def test_test_cancellation_terminates_process_tree(
+    tmp_path: Path,
+    valid_task_data: dict[str, Any],
+) -> None:
+    marker = tmp_path / "cancelled-child.json"
+    child_code = (
+        "import json,time; "
+        "time.sleep(2); "
+        f"open({str(marker)!r}, 'w', encoding='utf-8').write(json.dumps({{'alive': True}}))"
+    )
+    slow_test = (
+        "import subprocess\n"
+        "import sys\n"
+        "import time\n\n"
+        "def test_slow() -> None:\n"
+        f"    subprocess.Popen([sys.executable, '-c', {child_code!r}])\n"
+        "    time.sleep(20)\n"
+    )
+    context, _ = make_context(
+        tmp_path,
+        valid_task_data,
+        files={"calculator.py": "VALUE = 1\n", "tests/test_slow.py": slow_test},
+    )
+    token = CancellationToken()
+    context = ToolContext.create(
+        context.workspace,
+        context.task_spec,
+        context.limits,
+        cancellation_token=token,
+    )
+    timer = threading.Timer(0.25, token.cancel)
+    timer.start()
+    try:
+        result = RunTestsTool(context).execute(RunTestsInput(profile_command_id="acceptance:0"))
+    finally:
+        timer.cancel()
+    time.sleep(2.5)
+
+    assert result.error is not None
+    assert result.data is not None
+    assert result.error.code == "CANCELLED"
+    assert result.data["cancelled"] is True
     assert not marker.exists(), json.loads(marker.read_text()) if marker.exists() else ""

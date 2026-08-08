@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from patchpilot.domain.cancellation import CancellationToken
 from patchpilot.domain.task import TaskSpec
 from patchpilot.sandbox.workspace import PathPolicyError, Workspace, WorkspacePathPolicy
 
@@ -52,6 +53,7 @@ class ToolContext:
     task_spec: TaskSpec
     limits: ToolLimits
     path_policy: WorkspacePathPolicy
+    cancellation_token: CancellationToken
 
     @classmethod
     def create(
@@ -59,6 +61,7 @@ class ToolContext:
         workspace: Workspace,
         task_spec: TaskSpec,
         limits: ToolLimits | None = None,
+        cancellation_token: CancellationToken | None = None,
     ) -> ToolContext:
         return cls(
             workspace=workspace,
@@ -69,6 +72,7 @@ class ToolContext:
                 allowed_paths=task_spec.allowed_paths,
                 denied_paths=task_spec.denied_paths,
             ),
+            cancellation_token=cancellation_token or CancellationToken(),
         )
 
 

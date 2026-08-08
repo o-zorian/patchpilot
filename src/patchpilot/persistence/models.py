@@ -27,6 +27,7 @@ class TaskRow(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     external_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    owner_id: Mapped[str] = mapped_column(String(128), nullable=False, default="local", index=True)
     title: Mapped[str | None] = mapped_column(String(500))
     task_spec: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
     spec_version: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -38,6 +39,14 @@ class RunRow(Base):
     __table_args__ = (
         Index("ix_runs_task_id_created_at", "task_id", "created_at"),
         Index("ix_runs_status", "status"),
+        Index(
+            "uq_runs_idempotency_scope",
+            "task_id",
+            "strategy",
+            "model",
+            "idempotency_key",
+            unique=True,
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -60,6 +69,10 @@ class RunRow(Base):
     error_code: Mapped[str | None] = mapped_column(String(64))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    worker_id: Mapped[str | None] = mapped_column(String(255), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 

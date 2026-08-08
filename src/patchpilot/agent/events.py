@@ -30,6 +30,7 @@ class EventType(StrEnum):
     QUALITY_GATE_FAILED = "quality_gate.failed"
     QUALITY_GATE_PASSED = "quality_gate.passed"
     RUN_COMPLETED = "run.completed"
+    RUN_CANCELLED = "run.cancelled"
     RUN_FAILED = "run.failed"
 
 

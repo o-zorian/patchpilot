@@ -6,6 +6,7 @@ import json
 import random
 import time
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
@@ -16,6 +17,7 @@ from patchpilot.agent.budget import BudgetSnapshot, BudgetStopReason, BudgetTrac
 from patchpilot.agent.events import EventEmitter, EventType
 from patchpilot.agent.prompts import PROMPT_VERSION, build_initial_messages
 from patchpilot.agent.registry import FinishInput, ToolRegistry
+from patchpilot.domain.cancellation import CancellationToken
 from patchpilot.domain.run import RunStatus
 from patchpilot.domain.scorecard import QualityResult, Scorecard, ScorecardMetrics
 from patchpilot.models.base import (
@@ -36,6 +38,7 @@ class AgentLoopStatus(StrEnum):
     FINISH_REQUESTED = "finish_requested"
     PASSED = "passed"
     TIMEOUT = "timeout"
+    CANCELLED = "cancelled"
     BUDGET_EXCEEDED = "budget_exceeded"
     FAILED = "failed"
 
@@ -106,6 +109,10 @@ class _BudgetReached(RuntimeError):
         self.reason = reason
 
 
+class _RunCancelled(RuntimeError):
+    pass
+
+
 Sleep = Callable[[float], Awaitable[None]]
 
 
@@ -124,6 +131,7 @@ class AgentLoop:
         random_source: random.Random | None = None,
         clock: Callable[[], float] = time.monotonic,
         quality_gate: QualityGate | None = None,
+        cancellation_token: CancellationToken | None = None,
     ) -> None:
         self.model_client = model_client
         self.model_config = model_config
@@ -134,6 +142,7 @@ class AgentLoop:
         self.random = random_source or random.Random()
         self.budget = BudgetTracker(tool_context.task_spec.budget, model_config, clock=clock)
         self.quality_gate = quality_gate
+        self.cancellation_token = cancellation_token or tool_context.cancellation_token
 
     async def run(self, run_id: UUID) -> AgentLoopResult:
         if run_id != self.events.run_id:
@@ -162,6 +171,8 @@ class AgentLoop:
 
         while True:
             gate_feedback_received = False
+            if self.cancellation_token.is_cancelled:
+                return await self._cancelled_result(run_id)
             stop_reason = self.budget.before_step()
             if stop_reason is not None:
                 return await self._budget_result(run_id, stop_reason)
@@ -170,6 +181,8 @@ class AgentLoop:
                 response, attempt = await self._request_model(messages)
             except _BudgetReached as exc:
                 return await self._budget_result(run_id, exc.reason)
+            except _RunCancelled:
+                return await self._cancelled_result(run_id)
             except ModelClientError as exc:
                 return await self._failure_result(
                     run_id,
@@ -211,6 +224,8 @@ class AgentLoop:
                 continue
 
             for call in response.tool_calls:
+                if self.cancellation_token.is_cancelled:
+                    return await self._cancelled_result(run_id)
                 wall_stop = self.budget.check_non_step_limits()
                 if wall_stop is not None:
                     return await self._budget_result(run_id, wall_stop)
@@ -232,7 +247,8 @@ class AgentLoop:
                         "tool": call.name,
                     },
                 )
-                execution = self.registry.execute(
+                execution = await asyncio.to_thread(
+                    self.registry.execute,
                     call,
                     timeout_seconds=self.budget.remaining_wall_time_seconds,
                 )
@@ -262,6 +278,8 @@ class AgentLoop:
                         content=result.model_dump_json(),
                     )
                 )
+                if self.cancellation_token.is_cancelled:
+                    return await self._cancelled_result(run_id)
 
                 if error_code in {"INVALID_TOOL_CALL", "UNKNOWN_TOOL"}:
                     fingerprint = self._invalid_fingerprint(call, error_code)
@@ -340,14 +358,18 @@ class AgentLoop:
                             gate_feedback_received = True
                             break
                         status = (
-                            AgentLoopStatus.TIMEOUT
+                            AgentLoopStatus.CANCELLED
+                            if outcome.result == QualityResult.CANCELLED
+                            else AgentLoopStatus.TIMEOUT
                             if outcome.result == QualityResult.TIMEOUT
                             else AgentLoopStatus.BUDGET_EXCEEDED
                             if outcome.result == QualityResult.BUDGET_EXCEEDED
                             else AgentLoopStatus.FAILED
                         )
                         await self.events.emit(
-                            EventType.RUN_FAILED,
+                            EventType.RUN_CANCELLED
+                            if status == AgentLoopStatus.CANCELLED
+                            else EventType.RUN_FAILED,
                             {
                                 "status": status.value,
                                 "result_code": outcome.result.value,
@@ -357,7 +379,9 @@ class AgentLoop:
                             },
                         )
                         run_status = (
-                            RunStatus.TIMEOUT
+                            RunStatus.CANCELLED
+                            if status == AgentLoopStatus.CANCELLED
+                            else RunStatus.TIMEOUT
                             if status == AgentLoopStatus.TIMEOUT
                             else RunStatus.BUDGET_EXCEEDED
                             if status == AgentLoopStatus.BUDGET_EXCEEDED
@@ -424,15 +448,33 @@ class AgentLoop:
                 )
                 if timeout <= 0:
                     raise _BudgetReached(BudgetStopReason.MAX_WALL_TIME_SECONDS)
-                response = await asyncio.wait_for(
+                model_task = asyncio.create_task(
                     self.model_client.complete(
                         list(messages),
                         self.registry.schemas,
                         self.model_config,
-                    ),
-                    timeout=timeout,
+                    )
                 )
-                return response, attempt
+                cancellation_task = asyncio.create_task(self.cancellation_token.wait())
+                done, _ = await asyncio.wait(
+                    {model_task, cancellation_task},
+                    timeout=timeout,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if cancellation_task in done:
+                    model_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await model_task
+                    raise _RunCancelled
+                cancellation_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await cancellation_task
+                if model_task not in done:
+                    model_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await model_task
+                    raise TimeoutError
+                return model_task.result(), attempt
             except TimeoutError as exc:
                 error: ModelClientError = ModelTimeoutError("model request timed out")
                 error.__cause__ = exc
@@ -561,6 +603,36 @@ class AgentLoop:
             status=AgentLoopStatus.FAILED,
             result_code=result_code,
             error_code=error_code,
+            scorecard=scorecard,
+            metrics=metrics,
+        )
+
+    async def _cancelled_result(self, run_id: UUID) -> AgentLoopResult:
+        metrics = AgentMetrics.from_snapshot(self.budget.snapshot())
+        scorecard = None
+        if self.quality_gate is not None:
+            scorecard = await self.quality_gate.finalize_terminal(
+                QualityResult.CANCELLED,
+                metrics.to_scorecard_metrics(),
+                summary="Run cancelled cooperatively",
+            )
+        await self.events.emit(
+            EventType.RUN_CANCELLED,
+            {
+                "status": AgentLoopStatus.CANCELLED.value,
+                "result_code": QualityResult.CANCELLED.value,
+                "steps": metrics.steps,
+            },
+        )
+        if self.quality_gate is not None:
+            if scorecard is None:
+                raise RuntimeError("Quality Gate did not create a cancellation Scorecard")
+            await self.quality_gate.finalize_run(RunStatus.CANCELLED, scorecard)
+            await self.quality_gate.finalize_event_log()
+        return AgentLoopResult(
+            run_id=run_id,
+            status=AgentLoopStatus.CANCELLED,
+            result_code=QualityResult.CANCELLED.value,
             scorecard=scorecard,
             metrics=metrics,
         )

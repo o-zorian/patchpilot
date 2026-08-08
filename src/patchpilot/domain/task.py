@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
+from uuid import UUID
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
@@ -166,6 +168,15 @@ class TaskSpec(BaseModel):
         return self
 
 
+class TaskRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: UUID
+    owner_id: str
+    spec: TaskSpec
+    created_at: datetime
+
+
 @dataclass(frozen=True, slots=True)
 class TaskLimits:
     max_steps: int
@@ -249,6 +260,21 @@ def load_task_spec(path: Path, limits: TaskLimits) -> LoadedTaskSpec:
         spec=spec,
         source_path=source_path,
         repository_path=repository_path,
+    )
+
+
+def validate_task_spec_context(
+    spec: TaskSpec,
+    *,
+    base_directory: Path,
+    limits: TaskLimits,
+) -> TaskSpec:
+    """Validate an API-provided TaskSpec and freeze its repository as an absolute path."""
+
+    synthetic_source = base_directory.expanduser().resolve() / "api-task.json"
+    repository = _validate_context(spec, synthetic_source, limits)
+    return spec.model_copy(
+        update={"repository": spec.repository.model_copy(update={"path": str(repository)})}
     )
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import tempfile
 import time
@@ -181,7 +182,10 @@ class QualityGate:
             and initial_budget_valid
             and not sandbox_error
         ):
-            test_suite = self._run_acceptance(remaining_wall_time_seconds)
+            test_suite = await asyncio.to_thread(
+                self._run_acceptance,
+                remaining_wall_time_seconds,
+            )
 
         elapsed = time.monotonic() - started
         final_metrics = metrics.model_copy(
@@ -209,6 +213,8 @@ class QualityGate:
             sandbox_error=sandbox_error or test_suite.sandbox_error,
             regression=test_suite.regression,
         )
+        if self.context.cancellation_token.is_cancelled:
+            result = QualityResult.CANCELLED
         failure: GateFailure | None = None
         if result != QualityResult.PASSED:
             failure = GateFailure(
@@ -383,6 +389,7 @@ class QualityGate:
                         timeout_seconds=max(0.001, timeout),
                         output_max_chars=self.context.limits.output_max_chars,
                         environment={"PYTEST_ADDOPTS": "--color=no"},
+                        cancel_event=self.context.cancellation_token.event,
                     )
                     executed, failed, skipped = self._parse_junit(report_path)
                     runs.append(
@@ -400,6 +407,8 @@ class QualityGate:
                             skipped_tests=skipped,
                         )
                     )
+                    if command_result.cancelled:
+                        break
                 except OSError as exc:
                     runs.append(
                         _TestRun(

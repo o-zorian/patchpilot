@@ -56,6 +56,7 @@ class RunTestsTool:
                 timeout_seconds=effective_timeout,
                 output_max_chars=self.context.limits.output_max_chars,
                 environment={"PYTEST_ADDOPTS": "--color=no"},
+                cancel_event=self.context.cancellation_token.event,
             )
         except OSError as exc:
             return failure(
@@ -73,7 +74,18 @@ class RunTestsTool:
             "stderr": result.stderr,
             "timed_out": result.timed_out,
             "isolation": "trusted-local",
+            "cancelled": result.cancelled,
         }
+        if result.cancelled:
+            return ToolResult(
+                ok=False,
+                tool=self.name,
+                summary="tests cancelled",
+                data=data,
+                error={"code": "CANCELLED", "message": "test process tree was cancelled"},
+                truncated=result.truncated,
+                duration_ms=result.duration_ms,
+            )
         if result.timed_out:
             return ToolResult(
                 ok=False,

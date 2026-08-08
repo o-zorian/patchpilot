@@ -23,12 +23,14 @@ from patchpilot.domain.task import (
 from patchpilot.logging import configure_logging
 from patchpilot.persistence.database import Database
 from patchpilot.persistence.migrations import upgrade_database
-from patchpilot.persistence.repositories import RunNotFoundError, RunRepository
+from patchpilot.persistence.repositories import RunNotFoundError, TaskNotFoundError
+from patchpilot.queue import InMemoryRunQueue
+from patchpilot.services import RunExecutor, RunService, task_limits
 
 app = typer.Typer(no_args_is_help=True, help="PatchPilot controlled coding-agent harness.")
 task_app = typer.Typer(no_args_is_help=True, help="Validate and inspect TaskSpec documents.")
 run_app = typer.Typer(no_args_is_help=True, help="Create and inspect persisted Run records.")
-db_app = typer.Typer(no_args_is_help=True, help="Manage the PatchPilot SQLite database.")
+db_app = typer.Typer(no_args_is_help=True, help="Manage the PatchPilot database schema.")
 app.add_typer(task_app, name="task")
 app.add_typer(run_app, name="run")
 app.add_typer(db_app, name="db")
@@ -42,18 +44,7 @@ def _settings() -> AppSettings:
 
 
 def _limits(settings: AppSettings) -> TaskLimits:
-    return TaskLimits(
-        max_steps=settings.hard_max_steps,
-        max_input_tokens=settings.hard_max_input_tokens,
-        max_output_tokens=settings.hard_max_output_tokens,
-        max_cost_usd=settings.hard_max_cost_usd,
-        max_wall_time_seconds=settings.hard_max_wall_time_seconds,
-        max_changed_files=settings.hard_max_changed_files,
-        max_patch_lines=settings.hard_max_patch_lines,
-        max_command_timeout_seconds=settings.hard_max_command_timeout_seconds,
-        max_cpu_limit=settings.hard_max_cpu_limit,
-        max_memory_limit_mb=settings.hard_max_memory_limit_mb,
-    )
+    return task_limits(settings)
 
 
 def _load(path: Path, settings: AppSettings) -> LoadedTaskSpec:
@@ -138,7 +129,7 @@ def db_upgrade() -> None:
         upgrade_database(settings.database_url)
     except (SettingsError, OSError, ValueError) as exc:
         _fail(str(exc), json_output=False)
-    typer.echo(f"Database upgraded: {settings.sqlite_database_path()}")
+    typer.echo(f"Database upgraded: {settings.database_url}")
 
 
 async def _create_run(
@@ -149,15 +140,25 @@ async def _create_run(
     prompt_version: str,
 ) -> Run:
     database = Database(settings.database_url)
+    queue = InMemoryRunQueue()
     try:
-        async with database.session() as session:
-            return await RunRepository(session).create(
-                loaded.spec,
-                strategy=strategy,
-                model=model,
-                prompt_version=prompt_version,
-            )
+        service = RunService(database, queue, settings)
+        task = await service.create_task(
+            loaded.spec,
+            owner_id=settings.service_owner_id,
+            base_directory=loaded.source_path.parent,
+        )
+        run, _ = await service.submit_run(
+            task.id,
+            owner_id=settings.service_owner_id,
+            strategy=strategy,
+            model=model,
+            idempotency_key=None,
+            prompt_version=prompt_version,
+        )
+        return run
     finally:
+        await queue.close()
         await database.close()
 
 
@@ -191,10 +192,13 @@ def create_run(
 
 async def _get_run(settings: AppSettings, run_id: UUID) -> Run:
     database = Database(settings.database_url)
+    queue = InMemoryRunQueue()
     try:
-        async with database.session() as session:
-            return await RunRepository(session).get(run_id)
+        return await RunService(database, queue, settings).get_run(
+            run_id, owner_id=settings.service_owner_id
+        )
     finally:
+        await queue.close()
         await database.close()
 
 
@@ -205,10 +209,88 @@ def show_run(
 ) -> None:
     settings = _settings()
     try:
-        settings.sqlite_database_path()
+        settings.database_backend()
         run = asyncio.run(_get_run(settings, run_id))
-    except (SettingsError, RunNotFoundError, OSError, ValueError) as exc:
+    except (SettingsError, RunNotFoundError, TaskNotFoundError, OSError, ValueError) as exc:
         _fail(str(exc), json_output=json_output)
     payload = run.model_dump(mode="json")
     payload["ok"] = True
     _emit(payload, json_output=json_output, human=f"Run {run.id}: {run.status.value}")
+
+
+async def _execute_run(
+    settings: AppSettings,
+    loaded: LoadedTaskSpec,
+    strategy: RunStrategy,
+    model: str,
+) -> Run:
+    database = Database(settings.database_url)
+    queue = InMemoryRunQueue()
+    try:
+        service = RunService(database, queue, settings)
+        task = await service.create_task(
+            loaded.spec,
+            owner_id=settings.service_owner_id,
+            base_directory=loaded.source_path.parent,
+        )
+        run, _ = await service.submit_run(
+            task.id,
+            owner_id=settings.service_owner_id,
+            strategy=strategy,
+            model=model,
+            idempotency_key=None,
+        )
+        await RunExecutor(database, settings).execute(run.id, worker_id="cli-foreground")
+        return await service.get_run(run.id, owner_id=settings.service_owner_id)
+    finally:
+        await queue.close()
+        await database.close()
+
+
+@run_app.command("execute")
+def execute_run(
+    task_path: Annotated[Path, typer.Argument(exists=True, dir_okay=False, readable=True)],
+    model: Annotated[str, typer.Option("--model")],
+    strategy: Annotated[RunStrategy, typer.Option("--strategy")] = RunStrategy.FULL,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Execute a Run in the foreground through the same Agent Loop as the Worker."""
+    settings = _settings()
+    try:
+        loaded = _load(task_path, settings)
+        settings.ensure_runtime_directories()
+        upgrade_database(settings.database_url)
+        run = asyncio.run(_execute_run(settings, loaded, strategy, model))
+    except (TaskSpecLoadError, SettingsError, OSError, ValueError) as exc:
+        _fail(str(exc), json_output=json_output)
+    payload = run.model_dump(mode="json")
+    payload["ok"] = True
+    _emit(payload, json_output=json_output, human=f"Run {run.id}: {run.status.value}")
+
+
+async def _cancel_run(settings: AppSettings, run_id: UUID) -> Run:
+    database = Database(settings.database_url)
+    queue = InMemoryRunQueue()
+    try:
+        return await RunService(database, queue, settings).cancel_run(
+            run_id, owner_id=settings.service_owner_id
+        )
+    finally:
+        await queue.close()
+        await database.close()
+
+
+@run_app.command("cancel")
+def cancel_run(
+    run_id: Annotated[UUID, typer.Argument()],
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    settings = _settings()
+    try:
+        settings.database_backend()
+        run = asyncio.run(_cancel_run(settings, run_id))
+    except (SettingsError, RunNotFoundError, TaskNotFoundError, OSError, ValueError) as exc:
+        _fail(str(exc), json_output=json_output)
+    payload = run.model_dump(mode="json")
+    payload["ok"] = True
+    _emit(payload, json_output=json_output, human=f"Run {run.id}: cancellation requested")

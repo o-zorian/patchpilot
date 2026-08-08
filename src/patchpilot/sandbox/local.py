@@ -21,6 +21,7 @@ class CommandResult:
     timed_out: bool
     truncated: bool
     duration_ms: int
+    cancelled: bool = False
 
 
 class _CappedCollector:
@@ -201,6 +202,7 @@ def run_argv(
     output_max_chars: int,
     input_text: str | None = None,
     environment: Mapping[str, str] | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> CommandResult:
     if not argv or any("\x00" in argument for argument in argv):
         raise ValueError("argv must contain non-empty, NUL-free arguments")
@@ -244,10 +246,22 @@ def run_argv(
             pass
 
     timed_out = False
-    try:
-        return_code = process.wait(timeout=timeout_seconds)
-    except subprocess.TimeoutExpired:
-        timed_out = True
+    cancelled = False
+    deadline = started + timeout_seconds
+    while True:
+        if cancel_event is not None and cancel_event.is_set():
+            cancelled = True
+            break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            timed_out = True
+            break
+        try:
+            return_code = process.wait(timeout=min(0.1, remaining))
+            break
+        except subprocess.TimeoutExpired:
+            continue
+    if timed_out or cancelled:
         if windows_job is not None:
             windows_job.terminate()
         else:
@@ -273,4 +287,5 @@ def run_argv(
         timed_out=timed_out,
         truncated=stdout_collector.truncated or stderr_collector.truncated,
         duration_ms=duration_ms,
+        cancelled=cancelled,
     )

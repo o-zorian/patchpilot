@@ -1,7 +1,7 @@
 # PatchPilot
 
 PatchPilot is a controlled and auditable coding-agent harness. This repository currently
-contains milestones M0 through M3: the versioned task protocol and persistence skeleton,
+contains milestones M0 through M4: the versioned task protocol and persistence skeleton,
 independent trusted-local Workspaces, controlled tools, an OpenAI-compatible model boundary,
 offline scripted models, a project-owned Agent Loop, and deterministic Quality Gate reports.
 
@@ -69,5 +69,24 @@ atomic and indexed in SQLite with SHA-256 and byte size. Reports contain determi
 results and bounded summaries; full patch and test output stay in artifacts rather than event
 payloads.
 
-M3 does not add FastAPI, PostgreSQL, Redis, asynchronous Workers, SSE, cancellation, Docker,
-Go, or Benchmark execution. Trusted-local mode remains limited to project-owned fixtures.
+## M4 service mode
+
+M4 exposes the same task service and `RunExecutor` used by the foreground CLI through a
+FastAPI process and a Redis-backed asynchronous Worker. Configure `POSTGRES_DATABASE_URL`,
+`REDIS_URL`, artifact/workspace roots, and the model settings, then start the two processes:
+
+```text
+patchpilot-api
+patchpilot-worker
+```
+
+The API uses `/api/v1`, returns a `run_id` immediately from `POST /api/v1/runs`, and supports
+idempotent submission, owner-scoped reads, cooperative cancellation, persisted event paging,
+SSE at `/api/v1/runs/{run_id}/stream`, integrity-checked artifacts, readiness checks, and
+metrics. The Worker atomically claims a pending Run before invoking the project-owned Agent
+Loop and deterministic Quality Gate. The CLI command `patchpilot run execute` invokes that
+same execution path in foreground mode.
+
+SQLite and `InMemoryRunQueue` remain supported for local automated tests. Production API and
+Worker entry points select PostgreSQL and Redis. M4 does not add Docker sandboxing, Go, or
+Benchmark execution; trusted-local execution remains limited to project-owned repositories.
