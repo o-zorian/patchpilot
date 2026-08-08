@@ -1,0 +1,23 @@
+command_id: acceptance:0
+exit_code: 0
+timed_out: false
+duration_ms: 715
+truncated: false
+executed_tests: ["benchmarks.local-v1.results.full..work.workspaces.51d0d96b-4a84-44ec-a51f-3b294e57bd7f.test_patchpilot_hidden::test_extension_is_lowercase_without_dot", "test_extension_is_lowercase_without_dot"]
+failed_tests: []
+system_error: 
+stdout:
+============================= test session starts =============================
+platform win32 -- Python 3.14.6, pytest-9.1.1, pluggy-1.6.0
+rootdir: D:\materials\work\patchpilot
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+test_patchpilot_hidden.py .                                              [100%]
+
+- generated xml file: D:\materials\work\patchpilot\benchmarks\local-v1\results\full\.work\workspaces\51d0d96b-4a84-44ec-a51f-3b294e57bd7f\.patchpilot-junit-0-978f8752f99448f0b1d6795dff04ae4d.xml -
+============================== 1 passed in 0.14s ==============================
+
+stderr:

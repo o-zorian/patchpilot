@@ -1,0 +1,8 @@
+diff --git a/cases.py b/cases.py
+--- a/cases.py
++++ b/cases.py
+@@ -40,3 +40,3 @@
+ def normalize_extension(extension: str) -> str:
+-    return extension.removeprefix(".")
++    return extension.removeprefix(".").lower()
+ 

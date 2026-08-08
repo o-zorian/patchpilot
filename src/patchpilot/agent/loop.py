@@ -17,6 +17,7 @@ from patchpilot.agent.budget import BudgetSnapshot, BudgetStopReason, BudgetTrac
 from patchpilot.agent.events import EventEmitter, EventType
 from patchpilot.agent.prompts import PROMPT_VERSION, build_initial_messages
 from patchpilot.agent.registry import FinishInput, ToolRegistry
+from patchpilot.agent.strategies import StrategyPolicy
 from patchpilot.domain.cancellation import CancellationToken
 from patchpilot.domain.run import RunStatus
 from patchpilot.domain.scorecard import QualityResult, Scorecard, ScorecardMetrics
@@ -132,6 +133,7 @@ class AgentLoop:
         clock: Callable[[], float] = time.monotonic,
         quality_gate: QualityGate | None = None,
         cancellation_token: CancellationToken | None = None,
+        strategy_policy: StrategyPolicy | None = None,
     ) -> None:
         self.model_client = model_client
         self.model_config = model_config
@@ -143,6 +145,7 @@ class AgentLoop:
         self.budget = BudgetTracker(tool_context.task_spec.budget, model_config, clock=clock)
         self.quality_gate = quality_gate
         self.cancellation_token = cancellation_token or tool_context.cancellation_token
+        self.strategy_policy = strategy_policy
 
     async def run(self, run_id: UUID) -> AgentLoopResult:
         if run_id != self.events.run_id:
@@ -176,6 +179,18 @@ class AgentLoop:
             stop_reason = self.budget.before_step()
             if stop_reason is not None:
                 return await self._budget_result(run_id, stop_reason)
+            if (
+                self.strategy_policy is not None
+                and self.strategy_policy.max_model_calls is not None
+                and self.budget.model_calls >= self.strategy_policy.max_model_calls
+            ):
+                return await self._failure_result(
+                    run_id,
+                    result_code="MODEL_ERROR",
+                    error_code="STRATEGY_MODEL_CALL_LIMIT",
+                )
+            if self.strategy_policy is not None and self.strategy_policy.compact_context:
+                messages = await self._compact_messages(messages)
             self.budget.begin_step()
             try:
                 response, attempt = await self._request_model(messages)
@@ -341,6 +356,7 @@ class AgentLoop:
                             outcome.recoverable
                             and outcome.feedback is not None
                             and gate_feedbacks < 2
+                            and (self.strategy_policy is None or self.strategy_policy.gate_feedback)
                         ):
                             gate_feedbacks += 1
                             messages.append(
@@ -520,6 +536,35 @@ class AgentLoop:
             )
             await self.sleep(delay)
         raise RuntimeError("model retry loop exhausted without a result")
+
+    async def _compact_messages(self, messages: list[Message]) -> list[Message]:
+        """Bound old tool chatter while retaining immutable constraints and recent context."""
+
+        if len(messages) <= 10:
+            return messages
+        preserved = messages[:2]
+        recent = messages[-6:]
+        compacted_count = len(messages) - len(preserved) - len(recent)
+        summary = Message(
+            role=MessageRole.USER,
+            content=json.dumps(
+                {
+                    "type": "context_compaction",
+                    "summary": f"{compacted_count} older interaction messages compacted",
+                    "constraints_retained": True,
+                },
+                sort_keys=True,
+            ),
+        )
+        await self.events.emit(
+            EventType.CONTEXT_COMPACTED,
+            {
+                "messages_before": len(messages),
+                "messages_after": len(preserved) + 1 + len(recent),
+                "compacted_messages": compacted_count,
+            },
+        )
+        return [*preserved, summary, *recent]
 
     async def _budget_result(
         self,

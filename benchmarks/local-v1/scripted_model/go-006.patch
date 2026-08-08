@@ -1,0 +1,8 @@
+diff --git a/cases.go b/cases.go
+--- a/cases.go
++++ b/cases.go
+@@ -32,3 +32,3 @@
+ func CacheKey(tenant string, key string) string {
+-	return key
++	return fmt.Sprintf("%s:%s", tenant, key)
+ }

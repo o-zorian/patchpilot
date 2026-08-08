@@ -1,0 +1,11 @@
+diff --git a/cases.py b/cases.py
+index fc436c5..567f6ad 100644
+--- a/cases.py
++++ b/cases.py
+@@ -50,4 +50,6 @@ def merge_headers(base: dict[str, str], extra: dict[str, str]) -> dict[str, str]
+ 
+ 
+ def safe_divide(numerator: float, denominator: float) -> float | None:
++    if denominator == 0:
++        return None
+     return numerator / denominator

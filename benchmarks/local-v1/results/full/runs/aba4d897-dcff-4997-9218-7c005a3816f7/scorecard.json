@@ -1,0 +1,35 @@
+{
+  "schema_version": "1",
+  "run_id": "aba4d897-dcff-4997-9218-7c005a3816f7",
+  "task_id": "go-007",
+  "result": "PASSED",
+  "checks": {
+    "has_patch": true,
+    "scope_valid": true,
+    "patch_size_valid": true,
+    "tests_passed": true,
+    "required_tests_ran": true,
+    "budget_valid": true
+  },
+  "metrics": {
+    "steps": 7,
+    "model_calls": 7,
+    "tool_calls": 7,
+    "changed_files": 1,
+    "added_lines": 3,
+    "deleted_lines": 0,
+    "prompt_tokens": 896,
+    "completion_tokens": 175,
+    "estimated_cost_usd": 0.0007105,
+    "wall_time_seconds": 5.99603570002364
+  },
+  "failures": [],
+  "artifacts": {
+    "patch": "aba4d897-dcff-4997-9218-7c005a3816f7/final.patch",
+    "events": "aba4d897-dcff-4997-9218-7c005a3816f7/events.jsonl",
+    "test_log": "aba4d897-dcff-4997-9218-7c005a3816f7/test.log",
+    "scorecard": "aba4d897-dcff-4997-9218-7c005a3816f7/scorecard.json",
+    "report_markdown": "aba4d897-dcff-4997-9218-7c005a3816f7/report.md",
+    "report_html": "aba4d897-dcff-4997-9218-7c005a3816f7/report.html"
+  }
+}

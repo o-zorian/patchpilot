@@ -1,0 +1,10 @@
+diff --git a/cases.go b/cases.go
+--- a/cases.go
++++ b/cases.go
+@@ -15,3 +15,6 @@
+ func FirstOrEmpty(values []string) string {
++	if len(values) == 0 {
++		return ""
++	}
+ 	return values[0]
+ }

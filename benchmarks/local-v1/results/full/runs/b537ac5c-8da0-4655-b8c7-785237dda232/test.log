@@ -1,0 +1,23 @@
+command_id: acceptance:0
+exit_code: 0
+timed_out: false
+duration_ms: 764
+truncated: false
+executed_tests: ["benchmarks.local-v1.results.full..work.workspaces.b537ac5c-8da0-4655-b8c7-785237dda232.test_patchpilot_hidden::test_cache_key_is_tenant_scoped", "test_cache_key_is_tenant_scoped"]
+failed_tests: []
+system_error: 
+stdout:
+============================= test session starts =============================
+platform win32 -- Python 3.14.6, pytest-9.1.1, pluggy-1.6.0
+rootdir: D:\materials\work\patchpilot
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+test_patchpilot_hidden.py .                                              [100%]
+
+- generated xml file: D:\materials\work\patchpilot\benchmarks\local-v1\results\full\.work\workspaces\b537ac5c-8da0-4655-b8c7-785237dda232\.patchpilot-junit-0-81d5b3dc4b944343bacf4a352d8b2aa4.xml -
+============================== 1 passed in 0.17s ==============================
+
+stderr:

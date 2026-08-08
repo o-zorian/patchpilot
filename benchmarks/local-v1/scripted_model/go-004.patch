@@ -1,0 +1,11 @@
+diff --git a/cases.go b/cases.go
+--- a/cases.go
++++ b/cases.go
+@@ -23,4 +23,5 @@
+ func SortNames(values []string) []string {
+-	sort.Strings(values)
+-	return values
++	result := append([]string(nil), values...)
++	sort.Strings(result)
++	return result
+ }

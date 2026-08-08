@@ -1,0 +1,8 @@
+diff --git a/cases.py b/cases.py
+--- a/cases.py
++++ b/cases.py
+@@ -28,3 +28,3 @@
+ def cache_key(tenant: str, key: str) -> str:
+-    return key
++    return f"{tenant}:{key}"
+ 

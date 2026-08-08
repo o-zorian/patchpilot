@@ -1,0 +1,55 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>local-v1 benchmark</title><style>body{font:15px/1.5 system-ui;max-width:1100px;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse}th,td{border:1px solid #ccd;padding:.45rem .7rem}pre{white-space:pre-wrap;background:#f6f8fa;padding:1rem;border-radius:8px}</style></head><body><h1>PatchPilot Benchmark</h1><table><thead><tr><th>Strategy</th><th>Runs</th><th>Pass rate</th><th>Avg cost USD</th></tr></thead><tbody><tr><td>full</td><td>1</td><td>100.0%</td><td>0.000710</td></tr></tbody></table><pre># PatchPilot Benchmark: local-v1
+
+## Experiment configuration
+
+- Task-set SHA-256: `220c7c8c44c44b52b518e6791c36f7ab8635e2257ee714b94b96068e8afdc115`
+- Model: `scripted-benchmark-v1` (offline Scripted Model)
+- Prompt version: `m6-v1`
+- Repetitions: 1
+- Strategies: full
+
+## Overall metrics
+
+- Runs: 1
+- Pass rate: 100.0%
+- First-gate pass rate: 100.0%
+- Average steps/model calls/tool calls: 7.00 / 7.00 / 7.00
+- Average tokens: 896.00 prompt / 175.00 completion
+- Average estimated cost: $0.000710
+- Average wall time: 3.242s
+- Scope violation rate: 0.0%
+- Regression rate: 0.0%
+
+## Cost and pass-rate comparison
+
+| Strategy | Runs | Pass rate | First gate | Avg cost USD | Avg wall s |
+|---|---:|---:|---:|---:|---:|
+| full | 1 | 100.0% | 100.0% | 0.000710 | 3.242 |
+
+## Pass rate by defect category
+
+| Defect | Runs | Pass rate |
+|---|---:|---:|
+| boundary | 1 | 100.0% |
+
+## Successful cases
+
+- `py-001` / `full`: PASSED; steps=7, tools=7
+
+## Failed cases
+
+- No cases available in this filtered run.
+
+## Failure analysis
+
+- None
+
+Failures in this deterministic fixture run primarily indicate strategy capability limits or a Quality Gate rejection, not random model behavior.
+
+## Conclusions this benchmark cannot support
+
+- Results use a deterministic Scripted Model and measure harness behavior, not model intelligence.
+- The local suite contains small synthetic repositories and does not represent SWE-bench.
+- One repetition is reproducible but cannot estimate variance from stochastic real models.
+- Trusted-local execution is reserved for project-owned fixtures; unknown repositories require Docker.
+</pre></body></html>

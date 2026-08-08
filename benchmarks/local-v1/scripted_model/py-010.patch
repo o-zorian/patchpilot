@@ -1,0 +1,8 @@
+diff --git a/cases.py b/cases.py
+--- a/cases.py
++++ b/cases.py
+@@ -44,3 +44,3 @@
+ def retry_delay(attempt: int, maximum: int) -> int:
+-    return 2**attempt
++    return min(2**attempt, maximum)
+ 

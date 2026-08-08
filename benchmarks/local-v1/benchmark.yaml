@@ -1,0 +1,14 @@
+version: "1"
+id: local-v1
+task_glob: tasks/*.yaml
+strategies:
+  - single_shot
+  - agent_loop
+  - agent_loop_with_tests
+  - full
+model: scripted-benchmark-v1
+prompt_version: m6-v1
+repetitions: 1
+concurrency: 2
+temperature: 0
+max_tokens: 4096

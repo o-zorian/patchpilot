@@ -1,0 +1,15 @@
+command_id: acceptance:0
+exit_code: 0
+timed_out: false
+duration_ms: 3938
+truncated: false
+executed_tests: ["TestBuildWhereActive"]
+failed_tests: []
+system_error: 
+stdout:
+=== RUN   TestBuildWhereActive
+--- PASS: TestBuildWhereActive (0.00s)
+PASS
+ok  	benchmarkcases	2.304s
+
+stderr:

@@ -1,0 +1,8 @@
+diff --git a/cases.go b/cases.go
+--- a/cases.go
++++ b/cases.go
+@@ -19,3 +19,3 @@
+ func Offset(page int, size int) int {
+-	return page * size
++	return (page - 1) * size
+ }

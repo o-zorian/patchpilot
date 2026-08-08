@@ -1,0 +1,15 @@
+command_id: acceptance:0
+exit_code: 0
+timed_out: false
+duration_ms: 20509
+truncated: false
+executed_tests: ["TestNormalizePageZero"]
+failed_tests: []
+system_error: 
+stdout:
+=== RUN   TestNormalizePageZero
+--- PASS: TestNormalizePageZero (0.00s)
+PASS
+ok  	benchmarkcases	3.826s
+
+stderr:

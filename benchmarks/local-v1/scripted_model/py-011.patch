@@ -1,0 +1,10 @@
+diff --git a/cases.py b/cases.py
+--- a/cases.py
++++ b/cases.py
+@@ -48,3 +48,5 @@
+ def merge_headers(base: dict[str, str], extra: dict[str, str]) -> dict[str, str]:
+-    return {**base, **extra}
++    normalized = {name.lower(): value for name, value in base.items()}
++    normalized.update({name.lower(): value for name, value in extra.items()})
++    return normalized
+ 

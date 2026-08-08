@@ -11,6 +11,8 @@ import typer
 from pydantic import ValidationError
 
 from patchpilot import __version__
+from patchpilot.benchmark.models import BenchmarkError, load_benchmark
+from patchpilot.benchmark.runner import compare_summaries, run_benchmark
 from patchpilot.config import AppSettings, SettingsError
 from patchpilot.domain.run import Run, RunStrategy
 from patchpilot.domain.task import (
@@ -31,9 +33,11 @@ app = typer.Typer(no_args_is_help=True, help="PatchPilot controlled coding-agent
 task_app = typer.Typer(no_args_is_help=True, help="Validate and inspect TaskSpec documents.")
 run_app = typer.Typer(no_args_is_help=True, help="Create and inspect persisted Run records.")
 db_app = typer.Typer(no_args_is_help=True, help="Manage the PatchPilot database schema.")
+benchmark_app = typer.Typer(no_args_is_help=True, help="Validate and run local benchmarks.")
 app.add_typer(task_app, name="task")
 app.add_typer(run_app, name="run")
 app.add_typer(db_app, name="db")
+app.add_typer(benchmark_app, name="benchmark")
 logger = logging.getLogger(__name__)
 
 
@@ -294,3 +298,97 @@ def cancel_run(
     payload = run.model_dump(mode="json")
     payload["ok"] = True
     _emit(payload, json_output=json_output, human=f"Run {run.id}: cancellation requested")
+
+
+@benchmark_app.command("validate")
+def validate_benchmark(
+    path: Annotated[Path, typer.Argument(exists=True, file_okay=False, readable=True)],
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        suite = load_benchmark(path)
+    except BenchmarkError as exc:
+        _fail(str(exc), json_output=json_output)
+    languages: dict[str, int] = {}
+    difficulties: dict[str, int] = {}
+    defects: set[str] = set()
+    for benchmark_task in suite.tasks:
+        languages[benchmark_task.language] = languages.get(benchmark_task.language, 0) + 1
+        difficulties[benchmark_task.difficulty] = difficulties.get(benchmark_task.difficulty, 0) + 1
+        defects.add(benchmark_task.defect)
+    payload = {
+        "ok": True,
+        "benchmark_id": suite.manifest.id,
+        "tasks": len(suite.tasks),
+        "languages": languages,
+        "difficulties": difficulties,
+        "defect_categories": sorted(defects),
+        "strategies": [strategy.value for strategy in suite.manifest.strategies],
+        "task_set_sha256": suite.task_set_sha256,
+    }
+    _emit(
+        payload,
+        json_output=json_output,
+        human=(
+            f"Valid benchmark {suite.manifest.id}: {len(suite.tasks)} tasks, "
+            f"{len(defects)} defect categories"
+        ),
+    )
+
+
+@benchmark_app.command("run")
+def execute_benchmark(
+    path: Annotated[Path, typer.Argument(exists=True, file_okay=False, readable=True)],
+    output: Annotated[Path, typer.Option("--output", "-o", file_okay=False)],
+    strategy: Annotated[
+        list[RunStrategy] | None,
+        typer.Option("--strategy", help="Repeat to select strategies; default runs all four."),
+    ] = None,
+    repetitions: Annotated[int | None, typer.Option("--repetitions", min=1, max=10)] = None,
+    limit: Annotated[int | None, typer.Option("--limit", min=1)] = None,
+    concurrency: Annotated[int | None, typer.Option("--concurrency", min=1, max=16)] = None,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        result = asyncio.run(
+            run_benchmark(
+                path,
+                output,
+                strategies=tuple(strategy) if strategy else None,
+                repetitions=repetitions,
+                limit=limit,
+                concurrency=concurrency,
+            )
+        )
+    except (BenchmarkError, OSError, RuntimeError, ValueError) as exc:
+        _fail(str(exc), json_output=json_output)
+    payload = {
+        "ok": True,
+        "benchmark_id": result.summary.benchmark_id,
+        "runs": result.summary.overall.runs,
+        "pass_rate": result.summary.overall.pass_rate,
+        "output_directory": str(result.output_directory),
+        "artifacts": ["raw.jsonl", "summary.json", "report.md", "report.html"],
+    }
+    _emit(
+        payload,
+        json_output=json_output,
+        human=(
+            f"Benchmark {result.summary.benchmark_id}: {result.summary.overall.runs} runs, "
+            f"pass rate {result.summary.overall.pass_rate:.1%}; "
+            f"reports in {result.output_directory}"
+        ),
+    )
+
+
+@benchmark_app.command("compare")
+def compare_benchmark(
+    summaries: Annotated[
+        list[Path],
+        typer.Argument(exists=True, dir_okay=False, readable=True),
+    ],
+) -> None:
+    try:
+        typer.echo(compare_summaries(summaries), nl=False)
+    except BenchmarkError as exc:
+        _fail(str(exc), json_output=False)

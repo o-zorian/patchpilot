@@ -3,8 +3,10 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import shutil
 import time
 import xml.etree.ElementTree as ET
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -27,7 +29,7 @@ from patchpilot.persistence.repositories import RunRepository
 from patchpilot.profiles import profile_for
 from patchpilot.reporting.render import render_html, render_markdown
 from patchpilot.sandbox.base import SandboxError
-from patchpilot.sandbox.workspace import PathPolicyError
+from patchpilot.sandbox.workspace import PathPolicyError, normalize_logical_path
 from patchpilot.tools.base import ToolContext
 from patchpilot.tools.git import DiffSnapshot, collect_diff
 
@@ -38,6 +40,22 @@ class QualityGateLimits(BaseModel):
     patch_max_chars: int = Field(default=2_000_000, gt=0)
     test_log_max_chars: int = Field(default=200_000, gt=0)
     feedback_max_chars: int = Field(default=4_000, gt=0, le=4_000)
+
+
+@dataclass(frozen=True, slots=True)
+class HiddenTestInjection:
+    """A gate-only test file that is never present in the Agent-visible Workspace."""
+
+    source: Path
+    target: str
+
+    def validated(self) -> HiddenTestInjection:
+        source = self.source.expanduser().resolve(strict=True)
+        if not source.is_file() or source.is_symlink():
+            raise ValueError("hidden test source must be a regular file")
+        if source.stat().st_size > 1_000_000:
+            raise ValueError("hidden test source exceeds the 1 MB limit")
+        return HiddenTestInjection(source=source, target=normalize_logical_path(self.target))
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +136,8 @@ class QualityGate:
         events: EventEmitter,
         artifacts: ArtifactStore,
         limits: QualityGateLimits | None = None,
+        hidden_test: HiddenTestInjection | None = None,
+        acceptance_environment: Mapping[str, str] | None = None,
     ) -> None:
         if run_id != events.run_id or run_id != artifacts.run_id:
             raise ValueError("QualityGate Run IDs must match")
@@ -129,6 +149,8 @@ class QualityGate:
         self.events = events
         self.artifacts = artifacts
         self.limits = limits or QualityGateLimits()
+        self.hidden_test = hidden_test.validated() if hidden_test is not None else None
+        self.acceptance_environment = dict(acceptance_environment or {})
         self._failure_history: list[GateFailure] = []
 
     async def evaluate(
@@ -350,89 +372,114 @@ class QualityGate:
         profile = profile_for(self.context.task_spec)
         runs: list[_TestRun] = []
         gate_started = time.monotonic()
-        for index, command_id in enumerate(profile.command_ids):
-            remaining = remaining_wall_time_seconds - (time.monotonic() - gate_started)
-            if remaining <= 0:
-                runs.append(
-                    _TestRun(
-                        command_id=command_id,
-                        exit_code=None,
-                        timed_out=False,
-                        budget_limited=True,
-                        truncated=False,
-                        duration_ms=0,
-                        stdout="",
-                        stderr="",
-                        executed_tests=(),
-                        failed_tests=(),
-                        skipped_tests=(),
-                        system_error="Quality Gate wall-time budget exhausted",
+        hidden_path = self._inject_hidden_test()
+        go_cache: Path | None = None
+        environment = dict(profile.environment)
+        environment.update(self.acceptance_environment)
+        if self.context.task_spec.repository.language == "go":
+            if "GOCACHE" not in environment:
+                go_cache = self.context.workspace.path / ".patchpilot-go-cache"
+                environment["GOCACHE"] = str(go_cache)
+        try:
+            for index, command_id in enumerate(profile.command_ids):
+                remaining = remaining_wall_time_seconds - (time.monotonic() - gate_started)
+                if remaining <= 0:
+                    runs.append(
+                        _TestRun(
+                            command_id=command_id,
+                            exit_code=None,
+                            timed_out=False,
+                            budget_limited=True,
+                            truncated=False,
+                            duration_ms=0,
+                            stdout="",
+                            stderr="",
+                            executed_tests=(),
+                            failed_tests=(),
+                            skipped_tests=(),
+                            system_error="Quality Gate wall-time budget exhausted",
+                        )
                     )
-                )
-                break
-            resolved = profile.resolve(command_id)
-            report_path: Path | None = None
-            argv = list(resolved.argv)
-            if self.context.task_spec.repository.language == "python":
-                report_name = f".patchpilot-junit-{index}-{uuid4().hex}.xml"
-                report_path = self.context.workspace.path / report_name
-                argv.extend([f"--junitxml={report_name}", "-o", "junit_family=xunit2"])
-            timeout = min(float(resolved.timeout_seconds), remaining)
-            budget_limited = timeout < resolved.timeout_seconds
-            try:
-                command_result = self.context.command_sandbox.run(
-                    argv,
-                    cwd=self.context.workspace.path,
-                    timeout_seconds=max(0.001, timeout),
-                    output_max_chars=self.context.limits.output_max_chars,
-                    environment=profile.environment,
-                    cancel_event=self.context.cancellation_token.event,
-                )
-                if report_path is None:
-                    executed, failed, skipped = self._parse_go_test_output(
-                        f"{command_result.stdout}\n{command_result.stderr}"
-                    )
-                else:
-                    executed, failed, skipped = self._parse_junit(report_path)
-                runs.append(
-                    _TestRun(
-                        command_id=command_id,
-                        exit_code=command_result.return_code,
-                        timed_out=command_result.timed_out,
-                        budget_limited=budget_limited and command_result.timed_out,
-                        truncated=command_result.truncated,
-                        duration_ms=command_result.duration_ms,
-                        stdout=command_result.stdout,
-                        stderr=command_result.stderr,
-                        executed_tests=executed,
-                        failed_tests=failed,
-                        skipped_tests=skipped,
-                    )
-                )
-                if command_result.cancelled:
                     break
-            except (OSError, SandboxError) as exc:
-                runs.append(
-                    _TestRun(
-                        command_id=command_id,
-                        exit_code=None,
-                        timed_out=False,
-                        budget_limited=False,
-                        truncated=False,
-                        duration_ms=0,
-                        stdout="",
-                        stderr="",
-                        executed_tests=(),
-                        failed_tests=(),
-                        skipped_tests=(),
-                        system_error=f"sandbox command failed: {type(exc).__name__}",
+                resolved = profile.resolve(command_id)
+                report_path: Path | None = None
+                argv = list(resolved.argv)
+                if self.context.task_spec.repository.language == "python":
+                    report_name = f".patchpilot-junit-{index}-{uuid4().hex}.xml"
+                    report_path = self.context.workspace.path / report_name
+                    argv.extend([f"--junitxml={report_name}", "-o", "junit_family=xunit2"])
+                timeout = min(float(resolved.timeout_seconds), remaining)
+                budget_limited = timeout < resolved.timeout_seconds
+                try:
+                    command_result = self.context.command_sandbox.run(
+                        argv,
+                        cwd=self.context.workspace.path,
+                        timeout_seconds=max(0.001, timeout),
+                        output_max_chars=self.context.limits.output_max_chars,
+                        environment=environment,
+                        cancel_event=self.context.cancellation_token.event,
                     )
-                )
-                break
-            finally:
-                if report_path is not None and report_path.exists():
-                    report_path.unlink()
+                    if report_path is None:
+                        executed, failed, skipped = self._parse_go_test_output(
+                            f"{command_result.stdout}\n{command_result.stderr}"
+                        )
+                    else:
+                        executed, failed, skipped = self._parse_junit(report_path)
+                    runs.append(
+                        _TestRun(
+                            command_id=command_id,
+                            exit_code=command_result.return_code,
+                            timed_out=command_result.timed_out,
+                            budget_limited=budget_limited and command_result.timed_out,
+                            truncated=command_result.truncated,
+                            duration_ms=command_result.duration_ms,
+                            stdout=command_result.stdout,
+                            stderr=command_result.stderr,
+                            executed_tests=executed,
+                            failed_tests=failed,
+                            skipped_tests=skipped,
+                        )
+                    )
+                    if command_result.cancelled:
+                        break
+                except (OSError, SandboxError) as exc:
+                    runs.append(
+                        _TestRun(
+                            command_id=command_id,
+                            exit_code=None,
+                            timed_out=False,
+                            budget_limited=False,
+                            truncated=False,
+                            duration_ms=0,
+                            stdout="",
+                            stderr="",
+                            executed_tests=(),
+                            failed_tests=(),
+                            skipped_tests=(),
+                            system_error=f"sandbox command failed: {type(exc).__name__}",
+                        )
+                    )
+                    break
+                finally:
+                    if report_path is not None and report_path.exists():
+                        report_path.unlink()
+        finally:
+            if hidden_path is not None and hidden_path.exists():
+                hidden_path.unlink()
+            if go_cache is not None and go_cache.exists():
+                shutil.rmtree(go_cache)
         return self._summarize_tests(runs)
+
+    def _inject_hidden_test(self) -> Path | None:
+        if self.hidden_test is None:
+            return None
+        destination = (self.context.workspace.path / self.hidden_test.target).resolve(strict=False)
+        root = self.context.workspace.path.resolve(strict=True)
+        if not destination.is_relative_to(root) or destination.exists():
+            raise OSError("hidden test destination is unsafe or already exists")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(self.hidden_test.source, destination)
+        return destination
 
     def _summarize_tests(self, runs: list[_TestRun]) -> _TestSuite:
         executed = {name for run in runs for name in run.executed_tests}
@@ -455,6 +502,8 @@ class QualityGate:
             if text
         ]
         error_excerpt = "\n".join(excerpts)[: self.limits.feedback_max_chars]
+        if self.hidden_test is not None and failed:
+            error_excerpt = "Hidden acceptance test failed; source and assertions are redacted."
         log = self._render_test_log(runs)
         return _TestSuite(
             runs=tuple(runs),

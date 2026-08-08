@@ -1,0 +1,13 @@
+diff --git a/cases.py b/cases.py
+index fc436c5..dc1bc2b 100644
+--- a/cases.py
++++ b/cases.py
+@@ -9,6 +9,8 @@ def clamp_page(page: int) -> int:
+ 
+ 
+ def first_or_none(values: list[str]) -> str | None:
++    if not values:
++        return None
+     return values[0]
+ 
+ 

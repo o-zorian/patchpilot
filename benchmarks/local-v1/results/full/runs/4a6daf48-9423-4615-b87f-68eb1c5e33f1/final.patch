@@ -1,0 +1,19 @@
+diff --git a/cases.go b/cases.go
+index 4c60883..02a56b2 100644
+--- a/cases.go
++++ b/cases.go
+@@ -26,7 +26,13 @@ func SortNames(values []string) []string {
+ }
+ 
+ func DecodeEnabled(data []byte) (bool, error) {
+-	return len(data) > 0, nil
++	var payload struct {
++		Enabled bool `json:"enabled"`
++	}
++	if err := json.Unmarshal(data, &payload); err != nil {
++		return false, err
++	}
++	return payload.Enabled, nil
+ }
+ 
+ func CacheKey(tenant string, key string) string {

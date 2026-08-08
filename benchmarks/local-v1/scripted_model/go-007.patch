@@ -1,0 +1,10 @@
+diff --git a/cases.go b/cases.go
+--- a/cases.go
++++ b/cases.go
+@@ -36,3 +36,6 @@
+ func BuildWhere(activeOnly bool) (string, []any) {
++	if activeOnly {
++		return "SELECT id FROM users WHERE active = ?", []any{true}
++	}
+ 	return "SELECT id FROM users", nil
+ }

@@ -1,0 +1,14 @@
+diff --git a/cases.go b/cases.go
+--- a/cases.go
++++ b/cases.go
+@@ -28,3 +28,8 @@
+ func DecodeEnabled(data []byte) (bool, error) {
+-	return len(data) > 0, nil
++	var payload struct {
++		Enabled bool `json:"enabled"`
++	}
++	if err := json.Unmarshal(data, &payload); err != nil {
++		return false, err
++	}
++	return payload.Enabled, nil
+ }

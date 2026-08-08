@@ -1,0 +1,8 @@
+diff --git a/cases.py b/cases.py
+--- a/cases.py
++++ b/cases.py
+@@ -20,3 +20,3 @@
+ def sort_names(values: list[str]) -> list[str]:
+-    return sorted(values)
++    return sorted(values, key=str.casefold)
+ 

@@ -1,0 +1,8 @@
+diff --git a/cases.py b/cases.py
+--- a/cases.py
++++ b/cases.py
+@@ -11,2 +11,4 @@
+ def first_or_none(values: list[str]) -> str | None:
++    if not values:
++        return None
+     return values[0]

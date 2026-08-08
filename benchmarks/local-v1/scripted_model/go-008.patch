@@ -1,0 +1,20 @@
+diff --git a/cases.go b/cases.go
+--- a/cases.go
++++ b/cases.go
+@@ -40,3 +40,15 @@
+ func SafeJoin(root string, name string) (string, error) {
+-	return filepath.Join(root, name), nil
++	rootAbs, err := filepath.Abs(root)
++	if err != nil {
++		return "", err
++	}
++	candidate := filepath.Join(rootAbs, name)
++	relative, err := filepath.Rel(rootAbs, candidate)
++	if err != nil {
++		return "", err
++	}
++	if relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
++		return "", fmt.Errorf("path escapes root")
++	}
++	return candidate, nil
+ }

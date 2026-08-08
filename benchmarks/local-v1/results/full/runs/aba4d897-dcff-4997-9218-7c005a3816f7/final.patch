@@ -1,0 +1,14 @@
+diff --git a/cases.go b/cases.go
+index 4c60883..e83d1cd 100644
+--- a/cases.go
++++ b/cases.go
+@@ -34,6 +34,9 @@ func CacheKey(tenant string, key string) string {
+ }
+ 
+ func BuildWhere(activeOnly bool) (string, []any) {
++	if activeOnly {
++		return "SELECT id FROM users WHERE active = ?", []any{true}
++	}
+ 	return "SELECT id FROM users", nil
+ }
+ 

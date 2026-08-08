@@ -26,6 +26,7 @@ class EventType(StrEnum):
     TOOL_STARTED = "tool.started"
     TOOL_COMPLETED = "tool.completed"
     TOOL_FAILED = "tool.failed"
+    CONTEXT_COMPACTED = "context.compacted"
     QUALITY_GATE_STARTED = "quality_gate.started"
     QUALITY_GATE_FAILED = "quality_gate.failed"
     QUALITY_GATE_PASSED = "quality_gate.passed"

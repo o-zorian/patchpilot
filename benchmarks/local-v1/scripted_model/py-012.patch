@@ -1,0 +1,8 @@
+diff --git a/cases.py b/cases.py
+--- a/cases.py
++++ b/cases.py
+@@ -52,2 +52,4 @@
+ def safe_divide(numerator: float, denominator: float) -> float | None:
++    if denominator == 0:
++        return None
+     return numerator / denominator

@@ -1,0 +1,10 @@
+diff --git a/cases.py b/cases.py
+--- a/cases.py
++++ b/cases.py
+@@ -7,3 +7,5 @@
+ def clamp_page(page: int) -> int:
+-    return page
++    if page < 1:
++        return 1
++    return page
+ 

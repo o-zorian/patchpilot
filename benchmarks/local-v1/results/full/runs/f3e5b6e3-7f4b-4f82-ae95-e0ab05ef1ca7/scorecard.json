@@ -1,0 +1,42 @@
+{
+  "schema_version": "1",
+  "run_id": "f3e5b6e3-7f4b-4f82-ae95-e0ab05ef1ca7",
+  "task_id": "py-012",
+  "result": "PASSED",
+  "checks": {
+    "has_patch": true,
+    "scope_valid": true,
+    "patch_size_valid": true,
+    "tests_passed": true,
+    "required_tests_ran": true,
+    "budget_valid": true
+  },
+  "metrics": {
+    "steps": 4,
+    "model_calls": 4,
+    "tool_calls": 4,
+    "changed_files": 1,
+    "added_lines": 2,
+    "deleted_lines": 0,
+    "prompt_tokens": 470,
+    "completion_tokens": 100,
+    "estimated_cost_usd": 0.000385,
+    "wall_time_seconds": 3.1765539000334684
+  },
+  "failures": [
+    {
+      "result": "NO_PATCH",
+      "summary": "Workspace contains no patch",
+      "failed_tests": [],
+      "error_excerpt": ""
+    }
+  ],
+  "artifacts": {
+    "patch": "f3e5b6e3-7f4b-4f82-ae95-e0ab05ef1ca7/final.patch",
+    "events": "f3e5b6e3-7f4b-4f82-ae95-e0ab05ef1ca7/events.jsonl",
+    "test_log": "f3e5b6e3-7f4b-4f82-ae95-e0ab05ef1ca7/test.log",
+    "scorecard": "f3e5b6e3-7f4b-4f82-ae95-e0ab05ef1ca7/scorecard.json",
+    "report_markdown": "f3e5b6e3-7f4b-4f82-ae95-e0ab05ef1ca7/report.md",
+    "report_html": "f3e5b6e3-7f4b-4f82-ae95-e0ab05ef1ca7/report.html"
+  }
+}

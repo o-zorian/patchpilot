@@ -1,0 +1,136 @@
+{
+  "schema_version": "1",
+  "benchmark_id": "local-v1",
+  "generated_at": "2026-08-08T17:23:44.558107+00:00",
+  "task_set_sha256": "220c7c8c44c44b52b518e6791c36f7ab8635e2257ee714b94b96068e8afdc115",
+  "experiment": {
+    "task_count": 1,
+    "strategies": [
+      "full"
+    ],
+    "model": "scripted-benchmark-v1",
+    "model_parameters": {
+      "temperature": 0.0,
+      "max_tokens": 4096
+    },
+    "prompt_version": "m6-v1",
+    "repetitions": 1,
+    "network_model_calls": false
+  },
+  "overall": {
+    "runs": 1,
+    "passed": 1,
+    "pass_rate": 1.0,
+    "first_gate_pass_rate": 1.0,
+    "average_steps": 7.0,
+    "average_model_calls": 7.0,
+    "average_tool_calls": 7.0,
+    "average_prompt_tokens": 896.0,
+    "average_completion_tokens": 175.0,
+    "average_cost_usd": 0.00071,
+    "average_wall_time_seconds": 3.241814,
+    "scope_violation_rate": 0.0,
+    "regression_rate": 0.0
+  },
+  "by_strategy": {
+    "full": {
+      "runs": 1,
+      "passed": 1,
+      "pass_rate": 1.0,
+      "first_gate_pass_rate": 1.0,
+      "average_steps": 7.0,
+      "average_model_calls": 7.0,
+      "average_tool_calls": 7.0,
+      "average_prompt_tokens": 896.0,
+      "average_completion_tokens": 175.0,
+      "average_cost_usd": 0.00071,
+      "average_wall_time_seconds": 3.241814,
+      "scope_violation_rate": 0.0,
+      "regression_rate": 0.0
+    }
+  },
+  "by_language": {
+    "python": {
+      "runs": 1,
+      "passed": 1,
+      "pass_rate": 1.0,
+      "first_gate_pass_rate": 1.0,
+      "average_steps": 7.0,
+      "average_model_calls": 7.0,
+      "average_tool_calls": 7.0,
+      "average_prompt_tokens": 896.0,
+      "average_completion_tokens": 175.0,
+      "average_cost_usd": 0.00071,
+      "average_wall_time_seconds": 3.241814,
+      "scope_violation_rate": 0.0,
+      "regression_rate": 0.0
+    }
+  },
+  "by_difficulty": {
+    "easy": {
+      "runs": 1,
+      "passed": 1,
+      "pass_rate": 1.0,
+      "first_gate_pass_rate": 1.0,
+      "average_steps": 7.0,
+      "average_model_calls": 7.0,
+      "average_tool_calls": 7.0,
+      "average_prompt_tokens": 896.0,
+      "average_completion_tokens": 175.0,
+      "average_cost_usd": 0.00071,
+      "average_wall_time_seconds": 3.241814,
+      "scope_violation_rate": 0.0,
+      "regression_rate": 0.0
+    }
+  },
+  "by_defect": {
+    "boundary": {
+      "runs": 1,
+      "passed": 1,
+      "pass_rate": 1.0,
+      "first_gate_pass_rate": 1.0,
+      "average_steps": 7.0,
+      "average_model_calls": 7.0,
+      "average_tool_calls": 7.0,
+      "average_prompt_tokens": 896.0,
+      "average_completion_tokens": 175.0,
+      "average_cost_usd": 0.00071,
+      "average_wall_time_seconds": 3.241814,
+      "scope_violation_rate": 0.0,
+      "regression_rate": 0.0
+    }
+  },
+  "successes": [
+    {
+      "schema_version": "1",
+      "run_id": "83ff01f9-7a0b-43e6-aa64-7fa5f41431ac",
+      "task_id": "py-001",
+      "strategy": "full",
+      "repetition": 1,
+      "language": "python",
+      "difficulty": "easy",
+      "defect": "boundary",
+      "result": "PASSED",
+      "passed": true,
+      "first_gate_passed": true,
+      "steps": 7,
+      "model_calls": 7,
+      "tool_calls": 7,
+      "prompt_tokens": 896,
+      "completion_tokens": 175,
+      "estimated_cost_usd": "0.0007105",
+      "wall_time_seconds": 3.241813500004355,
+      "scope_violation": false,
+      "regression": false,
+      "artifact_directory": "runs/83ff01f9-7a0b-43e6-aa64-7fa5f41431ac"
+    }
+  ],
+  "failures": [],
+  "failure_reasons": {},
+  "limitations": [
+    "Results use a deterministic Scripted Model and measure harness behavior, not model intelligence.",
+    "The local suite contains small synthetic repositories and does not represent SWE-bench.",
+    "One repetition is reproducible but cannot estimate variance from stochastic real models.",
+    "Trusted-local execution is reserved for project-owned fixtures; unknown repositories require Docker."
+  ]
+}

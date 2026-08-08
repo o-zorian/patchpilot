@@ -1,0 +1,15 @@
+command_id: acceptance:0
+exit_code: 0
+timed_out: false
+duration_ms: 3581
+truncated: false
+executed_tests: ["TestCacheKeyTenantScope"]
+failed_tests: []
+system_error: 
+stdout:
+=== RUN   TestCacheKeyTenantScope
+--- PASS: TestCacheKeyTenantScope (0.00s)
+PASS
+ok  	benchmarkcases	2.016s
+
+stderr:

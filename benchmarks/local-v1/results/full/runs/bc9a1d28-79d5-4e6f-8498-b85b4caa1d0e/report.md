@@ -1,0 +1,39 @@
+# PatchPilot Run bc9a1d28-79d5-4e6f-8498-b85b4caa1d0e
+
+- Task: `go-005`
+- Result: **NO_PATCH**
+
+## Quality checks
+
+- has_patch: FAIL
+- scope_valid: FAIL
+- patch_size_valid: FAIL
+- tests_passed: FAIL
+- required_tests_ran: FAIL
+- budget_valid: PASS
+
+## Metrics
+
+- Steps: 4
+- Model calls: 4
+- Tool calls: 4
+- Changed files: 0
+- Patch lines: +0/-0
+- Tokens: 470 prompt / 100 completion
+- Estimated cost: $0.0003850
+- Wall time: 1.367s
+
+## Failures
+
+- **NO_PATCH**: Workspace contains no patch
+- **NO_PATCH**: Workspace contains no patch
+- **NO_PATCH**: Workspace contains no patch
+
+## Artifacts
+
+- patch: `bc9a1d28-79d5-4e6f-8498-b85b4caa1d0e/final.patch`
+- events: `bc9a1d28-79d5-4e6f-8498-b85b4caa1d0e/events.jsonl`
+- test_log: `bc9a1d28-79d5-4e6f-8498-b85b4caa1d0e/test.log`
+- scorecard: `bc9a1d28-79d5-4e6f-8498-b85b4caa1d0e/scorecard.json`
+- report_markdown: `bc9a1d28-79d5-4e6f-8498-b85b4caa1d0e/report.md`
+- report_html: `bc9a1d28-79d5-4e6f-8498-b85b4caa1d0e/report.html`

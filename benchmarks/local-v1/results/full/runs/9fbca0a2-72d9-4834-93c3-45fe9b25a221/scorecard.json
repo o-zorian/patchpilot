@@ -1,0 +1,42 @@
+{
+  "schema_version": "1",
+  "run_id": "9fbca0a2-72d9-4834-93c3-45fe9b25a221",
+  "task_id": "go-004",
+  "result": "NO_PATCH",
+  "checks": {
+    "has_patch": false,
+    "scope_valid": false,
+    "patch_size_valid": false,
+    "tests_passed": false,
+    "required_tests_ran": false,
+    "budget_valid": true
+  },
+  "metrics": {
+    "steps": 2,
+    "model_calls": 2,
+    "tool_calls": 2,
+    "changed_files": 0,
+    "added_lines": 0,
+    "deleted_lines": 0,
+    "prompt_tokens": 221,
+    "completion_tokens": 50,
+    "estimated_cost_usd": 0.0001855,
+    "wall_time_seconds": 0.43236080001224764
+  },
+  "failures": [
+    {
+      "result": "NO_PATCH",
+      "summary": "Workspace contains no patch",
+      "failed_tests": [],
+      "error_excerpt": ""
+    }
+  ],
+  "artifacts": {
+    "patch": "9fbca0a2-72d9-4834-93c3-45fe9b25a221/final.patch",
+    "events": "9fbca0a2-72d9-4834-93c3-45fe9b25a221/events.jsonl",
+    "test_log": "9fbca0a2-72d9-4834-93c3-45fe9b25a221/test.log",
+    "scorecard": "9fbca0a2-72d9-4834-93c3-45fe9b25a221/scorecard.json",
+    "report_markdown": "9fbca0a2-72d9-4834-93c3-45fe9b25a221/report.md",
+    "report_html": "9fbca0a2-72d9-4834-93c3-45fe9b25a221/report.html"
+  }
+}

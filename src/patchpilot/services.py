@@ -11,6 +11,7 @@ from uuid import UUID
 from patchpilot.agent.events import DatabaseEventSink, EventEmitter, EventType, JsonlEventSink
 from patchpilot.agent.loop import AgentLoop, AgentLoopResult
 from patchpilot.agent.registry import build_default_registry
+from patchpilot.agent.strategies import policy_for
 from patchpilot.artifacts import ArtifactKind, ArtifactStore
 from patchpilot.config import AppSettings
 from patchpilot.domain.cancellation import CancellationToken
@@ -288,10 +289,14 @@ class RunExecutor:
                 model_client=client,
                 model_config=self.model_config_factory(run),
                 tool_context=context,
-                registry=build_default_registry(context),
+                registry=build_default_registry(
+                    context,
+                    allowed_tools=policy_for(run.strategy).allowed_tools,
+                ),
                 events=events,
                 quality_gate=gate,
                 cancellation_token=token,
+                strategy_policy=policy_for(run.strategy),
             )
             return await loop.run(run.id)
         except Exception:

@@ -1,0 +1,17 @@
+diff --git a/cases.py b/cases.py
+index fc436c5..f33298d 100644
+--- a/cases.py
++++ b/cases.py
+@@ -34,7 +34,11 @@ def build_user_query(active_only: bool) -> tuple[str, tuple[object, ...]]:
+ 
+ 
+ def safe_join(root: Path, name: str) -> Path:
+-    return root / name
++    resolved_root = root.resolve()
++    candidate = (resolved_root / name).resolve()
++    if not candidate.is_relative_to(resolved_root):
++        raise ValueError("path escapes root")
++    return candidate
+ 
+ 
+ def normalize_extension(extension: str) -> str:

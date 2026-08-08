@@ -1,0 +1,13 @@
+diff --git a/cases.py b/cases.py
+index fc436c5..cd19f45 100644
+--- a/cases.py
++++ b/cases.py
+@@ -30,6 +30,8 @@ def cache_key(tenant: str, key: str) -> str:
+ 
+ 
+ def build_user_query(active_only: bool) -> tuple[str, tuple[object, ...]]:
++    if active_only:
++        return "SELECT id FROM users WHERE active = ?", (True,)
+     return "SELECT id FROM users", ()
+ 
+ 

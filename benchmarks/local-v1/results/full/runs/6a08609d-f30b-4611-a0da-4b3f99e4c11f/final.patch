@@ -1,0 +1,13 @@
+diff --git a/cases.go b/cases.go
+index 4c60883..059e8c2 100644
+--- a/cases.go
++++ b/cases.go
+@@ -30,7 +30,7 @@ func DecodeEnabled(data []byte) (bool, error) {
+ }
+ 
+ func CacheKey(tenant string, key string) string {
+-	return key
++	return fmt.Sprintf("%s:%s", tenant, key)
+ }
+ 
+ func BuildWhere(activeOnly bool) (string, []any) {

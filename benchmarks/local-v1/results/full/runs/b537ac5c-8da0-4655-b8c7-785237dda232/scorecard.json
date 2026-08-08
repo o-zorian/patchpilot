@@ -1,0 +1,35 @@
+{
+  "schema_version": "1",
+  "run_id": "b537ac5c-8da0-4655-b8c7-785237dda232",
+  "task_id": "py-006",
+  "result": "PASSED",
+  "checks": {
+    "has_patch": true,
+    "scope_valid": true,
+    "patch_size_valid": true,
+    "tests_passed": true,
+    "required_tests_ran": true,
+    "budget_valid": true
+  },
+  "metrics": {
+    "steps": 7,
+    "model_calls": 7,
+    "tool_calls": 7,
+    "changed_files": 1,
+    "added_lines": 1,
+    "deleted_lines": 1,
+    "prompt_tokens": 896,
+    "completion_tokens": 175,
+    "estimated_cost_usd": 0.0007105,
+    "wall_time_seconds": 2.898303699999815
+  },
+  "failures": [],
+  "artifacts": {
+    "patch": "b537ac5c-8da0-4655-b8c7-785237dda232/final.patch",
+    "events": "b537ac5c-8da0-4655-b8c7-785237dda232/events.jsonl",
+    "test_log": "b537ac5c-8da0-4655-b8c7-785237dda232/test.log",
+    "scorecard": "b537ac5c-8da0-4655-b8c7-785237dda232/scorecard.json",
+    "report_markdown": "b537ac5c-8da0-4655-b8c7-785237dda232/report.md",
+    "report_html": "b537ac5c-8da0-4655-b8c7-785237dda232/report.html"
+  }
+}

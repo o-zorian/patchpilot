@@ -1,0 +1,8 @@
+diff --git a/cases.py b/cases.py
+--- a/cases.py
++++ b/cases.py
+@@ -15,3 +15,3 @@
+ def paginate(values: list[int], page: int, size: int) -> list[int]:
+-    start = page * size
++    start = (page - 1) * size
+     return values[start : start + size]

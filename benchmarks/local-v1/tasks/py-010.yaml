@@ -1,0 +1,11 @@
+version: "1"
+id: py-010
+title: Cap exponential retry delay
+repository: {path: repos/python-cases, base_ref: main, language: python}
+goal: Keep exponential retry delay at or below the supplied maximum.
+allowed_paths: [cases.py]
+denied_paths: [.git/**]
+acceptance: {commands: [{argv: [python, -m, pytest], timeout_seconds: 30}], required_tests: [test_retry_delay_is_capped]}
+budget: {max_steps: 15, max_input_tokens: 80000, max_output_tokens: 16000, max_cost_usd: 0.2, max_wall_time_seconds: 120, max_changed_files: 1, max_patch_lines: 30}
+execution: {network: false, cpu_limit: 2, memory_limit_mb: 1024}
+metadata: {difficulty: medium, tags: [python, "defect:boundary"]}

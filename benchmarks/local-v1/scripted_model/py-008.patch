@@ -1,0 +1,12 @@
+diff --git a/cases.py b/cases.py
+--- a/cases.py
++++ b/cases.py
+@@ -36,3 +36,7 @@
+ def safe_join(root: Path, name: str) -> Path:
+-    return root / name
++    resolved_root = root.resolve()
++    candidate = (resolved_root / name).resolve()
++    if not candidate.is_relative_to(resolved_root):
++        raise ValueError("path escapes root")
++    return candidate
+ 

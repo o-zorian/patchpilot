@@ -1,0 +1,42 @@
+{
+  "schema_version": "1",
+  "run_id": "d751342f-d190-48d1-b04e-e8b1fbab7290",
+  "task_id": "py-008",
+  "result": "NO_PATCH",
+  "checks": {
+    "has_patch": false,
+    "scope_valid": false,
+    "patch_size_valid": false,
+    "tests_passed": false,
+    "required_tests_ran": false,
+    "budget_valid": true
+  },
+  "metrics": {
+    "steps": 1,
+    "model_calls": 1,
+    "tool_calls": 1,
+    "changed_files": 0,
+    "added_lines": 0,
+    "deleted_lines": 0,
+    "prompt_tokens": 107,
+    "completion_tokens": 25,
+    "estimated_cost_usd": 0.000091,
+    "wall_time_seconds": 0.40127649999340065
+  },
+  "failures": [
+    {
+      "result": "NO_PATCH",
+      "summary": "Workspace contains no patch",
+      "failed_tests": [],
+      "error_excerpt": ""
+    }
+  ],
+  "artifacts": {
+    "patch": "d751342f-d190-48d1-b04e-e8b1fbab7290/final.patch",
+    "events": "d751342f-d190-48d1-b04e-e8b1fbab7290/events.jsonl",
+    "test_log": "d751342f-d190-48d1-b04e-e8b1fbab7290/test.log",
+    "scorecard": "d751342f-d190-48d1-b04e-e8b1fbab7290/scorecard.json",
+    "report_markdown": "d751342f-d190-48d1-b04e-e8b1fbab7290/report.md",
+    "report_html": "d751342f-d190-48d1-b04e-e8b1fbab7290/report.html"
+  }
+}

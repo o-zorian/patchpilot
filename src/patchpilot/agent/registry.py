@@ -148,54 +148,69 @@ class ToolRegistry:
             )
 
 
-def build_default_registry(context: ToolContext) -> ToolRegistry:
+def build_default_registry(
+    context: ToolContext,
+    *,
+    allowed_tools: frozenset[str] | None = None,
+) -> ToolRegistry:
     registry = ToolRegistry()
+    allowed = allowed_tools
+
+    def enabled(name: str) -> bool:
+        return allowed is None or name in allowed
+
     list_files = ListFilesTool(context)
     search_code = SearchCodeTool(context)
     read_file = ReadFileTool(context)
     apply_patch = ApplyPatchTool(context)
     git_diff = GitDiffTool(context)
     run_tests = RunTestsTool(context)
-    registry.register(
-        "list_files",
-        "List bounded file paths below a Workspace-relative directory.",
-        ListFilesInput,
-        lambda arguments, _: list_files.execute(arguments),
-    )
-    registry.register(
-        "search_code",
-        "Search bounded UTF-8 source text inside the Workspace.",
-        SearchCodeInput,
-        lambda arguments, _: search_code.execute(arguments),
-    )
-    registry.register(
-        "read_file",
-        "Read a bounded line range from a UTF-8 Workspace file.",
-        ReadFileInput,
-        lambda arguments, _: read_file.execute(arguments),
-    )
-    registry.register(
-        "apply_patch",
-        "Atomically apply a scoped, budgeted unified text patch.",
-        ApplyPatchInput,
-        lambda arguments, _: apply_patch.execute(arguments),
-    )
-    registry.register(
-        "git_diff",
-        "Return the bounded Workspace Git diff or its statistics.",
-        GitDiffInput,
-        lambda arguments, _: git_diff.execute(arguments),
-    )
-    registry.register(
-        "run_tests",
-        "Run an application-defined language profile test command.",
-        RunTestsInput,
-        lambda arguments, timeout: run_tests.execute(
-            arguments,
-            timeout_seconds_override=timeout,
-        ),
-    )
-    if context.task_spec.repository.language == "go":
+    if enabled("list_files"):
+        registry.register(
+            "list_files",
+            "List bounded file paths below a Workspace-relative directory.",
+            ListFilesInput,
+            lambda arguments, _: list_files.execute(arguments),
+        )
+    if enabled("search_code"):
+        registry.register(
+            "search_code",
+            "Search bounded UTF-8 source text inside the Workspace.",
+            SearchCodeInput,
+            lambda arguments, _: search_code.execute(arguments),
+        )
+    if enabled("read_file"):
+        registry.register(
+            "read_file",
+            "Read a bounded line range from a UTF-8 Workspace file.",
+            ReadFileInput,
+            lambda arguments, _: read_file.execute(arguments),
+        )
+    if enabled("apply_patch"):
+        registry.register(
+            "apply_patch",
+            "Atomically apply a scoped, budgeted unified text patch.",
+            ApplyPatchInput,
+            lambda arguments, _: apply_patch.execute(arguments),
+        )
+    if enabled("git_diff"):
+        registry.register(
+            "git_diff",
+            "Return the bounded Workspace Git diff or its statistics.",
+            GitDiffInput,
+            lambda arguments, _: git_diff.execute(arguments),
+        )
+    if enabled("run_tests"):
+        registry.register(
+            "run_tests",
+            "Run an application-defined language profile test command.",
+            RunTestsInput,
+            lambda arguments, timeout: run_tests.execute(
+                arguments,
+                timeout_seconds_override=timeout,
+            ),
+        )
+    if context.task_spec.repository.language == "go" and enabled("run_linter"):
         run_linter = RunLinterTool(context)
         registry.register(
             "run_linter",
@@ -206,10 +221,11 @@ def build_default_registry(context: ToolContext) -> ToolRegistry:
                 timeout_seconds_override=timeout,
             ),
         )
-    registry.register(
-        "finish",
-        "Request deterministic Quality Gate evaluation; this does not mark the Run passed.",
-        FinishInput,
-        None,
-    )
+    if enabled("finish"):
+        registry.register(
+            "finish",
+            "Request deterministic Quality Gate evaluation; this does not mark the Run passed.",
+            FinishInput,
+            None,
+        )
     return registry

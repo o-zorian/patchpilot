@@ -1,0 +1,10 @@
+diff --git a/cases.go b/cases.go
+--- a/cases.go
++++ b/cases.go
+@@ -11,3 +11,6 @@
+ func NormalizePage(page int) int {
++	if page < 1 {
++		return 1
++	}
+ 	return page
+ }

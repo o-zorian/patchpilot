@@ -1,0 +1,42 @@
+{
+  "schema_version": "1",
+  "run_id": "deb95b41-0060-4770-a326-1480a7c7bf0b",
+  "task_id": "go-002",
+  "result": "PASSED",
+  "checks": {
+    "has_patch": true,
+    "scope_valid": true,
+    "patch_size_valid": true,
+    "tests_passed": true,
+    "required_tests_ran": true,
+    "budget_valid": true
+  },
+  "metrics": {
+    "steps": 4,
+    "model_calls": 4,
+    "tool_calls": 4,
+    "changed_files": 1,
+    "added_lines": 3,
+    "deleted_lines": 0,
+    "prompt_tokens": 470,
+    "completion_tokens": 100,
+    "estimated_cost_usd": 0.000385,
+    "wall_time_seconds": 21.137955499987584
+  },
+  "failures": [
+    {
+      "result": "NO_PATCH",
+      "summary": "Workspace contains no patch",
+      "failed_tests": [],
+      "error_excerpt": ""
+    }
+  ],
+  "artifacts": {
+    "patch": "deb95b41-0060-4770-a326-1480a7c7bf0b/final.patch",
+    "events": "deb95b41-0060-4770-a326-1480a7c7bf0b/events.jsonl",
+    "test_log": "deb95b41-0060-4770-a326-1480a7c7bf0b/test.log",
+    "scorecard": "deb95b41-0060-4770-a326-1480a7c7bf0b/scorecard.json",
+    "report_markdown": "deb95b41-0060-4770-a326-1480a7c7bf0b/report.md",
+    "report_html": "deb95b41-0060-4770-a326-1480a7c7bf0b/report.html"
+  }
+}

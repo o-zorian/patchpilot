@@ -1,0 +1,23 @@
+command_id: acceptance:0
+exit_code: 0
+timed_out: false
+duration_ms: 807
+truncated: false
+executed_tests: ["benchmarks.local-v1.results.full..work.workspaces.081da293-d634-48d1-b978-d30b071640f3.test_patchpilot_hidden::test_first_page_starts_at_zero", "test_first_page_starts_at_zero"]
+failed_tests: []
+system_error: 
+stdout:
+============================= test session starts =============================
+platform win32 -- Python 3.14.6, pytest-9.1.1, pluggy-1.6.0
+rootdir: D:\materials\work\patchpilot
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+test_patchpilot_hidden.py .                                              [100%]
+
+- generated xml file: D:\materials\work\patchpilot\benchmarks\local-v1\results\full\.work\workspaces\081da293-d634-48d1-b978-d30b071640f3\.patchpilot-junit-0-9c32d1e7711e4c068d7da32e554981c6.xml -
+============================== 1 passed in 0.18s ==============================
+
+stderr:
