@@ -3,7 +3,13 @@
 .pytest_cache
 .ruff_cache
 artifacts
+benchmark-results
+build
 data
+demo-work
+dist
+htmlcov
 workspaces
 __pycache__
 *.pyc
+*.egg-info

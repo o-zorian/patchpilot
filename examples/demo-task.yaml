@@ -1,0 +1,36 @@
+version: "1"
+id: release-demo-page-boundary
+title: Normalize non-positive page numbers
+repository:
+  path: ../demo-work/repository
+  base_ref: main
+  language: python
+goal: >-
+  Update clamp_page so zero and negative pages are treated as page 1 while
+  positive page numbers remain unchanged.
+allowed_paths:
+  - cases.py
+denied_paths:
+  - .git/**
+  - tests/**
+acceptance:
+  commands:
+    - argv: [python, -m, pytest]
+      timeout_seconds: 30
+  required_tests:
+    - test_page_zero_is_first
+budget:
+  max_steps: 10
+  max_input_tokens: 20000
+  max_output_tokens: 4000
+  max_cost_usd: 0.05
+  max_wall_time_seconds: 300
+  max_changed_files: 1
+  max_patch_lines: 20
+execution:
+  network: false
+  cpu_limit: 1
+  memory_limit_mb: 512
+metadata:
+  difficulty: easy
+  tags: [python, boundary, release-demo]

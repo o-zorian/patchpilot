@@ -1,13 +1,19 @@
 .env
+.coverage
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
 .venv/
 __pycache__/
 artifacts/
+benchmark-results/
 build/
 data/
+demo-work/
 dist/
+htmlcov/
 workspaces/
+*.sqlite
+*.sqlite3
 *.egg-info/
 

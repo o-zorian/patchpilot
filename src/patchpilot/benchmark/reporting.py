@@ -1,3 +1,6 @@
+# ruff: noqa: E501
+# Standalone HTML/CSS templates retain readable source lines.
+
 from __future__ import annotations
 
 import html
@@ -173,20 +176,136 @@ def render_markdown(summary: BenchmarkSummary) -> str:
 
 
 def render_html(summary: BenchmarkSummary) -> str:
-    markdown = render_markdown(summary)
-    rows = "".join(
-        f"<tr><td>{html.escape(name)}</td><td>{metrics.runs}</td>"
-        f"<td>{metrics.pass_rate:.1%}</td><td>{metrics.average_cost_usd:.6f}</td></tr>"
-        for name, metrics in summary.by_strategy.items()
+    strategy_rows: list[str] = []
+    strategy_bars: list[str] = []
+    for name, metrics in summary.by_strategy.items():
+        escaped_name = html.escape(name)
+        strategy_rows.append(
+            f"<tr><td><code>{escaped_name}</code></td><td>{metrics.runs}</td>"
+            f"<td>{metrics.pass_rate:.1%}</td><td>{metrics.first_gate_pass_rate:.1%}</td>"
+            f"<td>{metrics.average_steps:.2f}</td><td>{metrics.average_prompt_tokens:.1f} / "
+            f"{metrics.average_completion_tokens:.1f}</td>"
+            f"<td>${metrics.average_cost_usd:.6f}</td>"
+            f"<td>{metrics.average_wall_time_seconds:.3f}s</td></tr>"
+        )
+        width = max(0.0, min(metrics.pass_rate * 100, 100.0))
+        strategy_bars.append(
+            '<div class="bar-row"><code>'
+            f'{escaped_name}</code><div class="track"><span style="width:{width:.2f}%"></span>'
+            f"</div><strong>{metrics.pass_rate:.1%}</strong></div>"
+        )
+
+    def group_rows(groups: dict[str, MetricGroup]) -> str:
+        return "".join(
+            f"<tr><td>{html.escape(name)}</td><td>{metrics.runs}</td>"
+            f"<td>{metrics.pass_rate:.1%}</td><td>{metrics.average_cost_usd:.6f}</td></tr>"
+            for name, metrics in groups.items()
+        )
+
+    def case_cards(records: list[BenchmarkRunRecord], empty: str) -> str:
+        if not records:
+            return f'<p class="muted">{html.escape(empty)}</p>'
+        return "".join(
+            '<article class="case"><div><strong>'
+            f"{html.escape(record.task_id)}</strong><code>{html.escape(record.strategy.value)}</code>"
+            f'</div><span class="result">{html.escape(record.result)}</span>'
+            f"<p>{html.escape(record.language)} · {html.escape(record.difficulty)} · "
+            f"{html.escape(record.defect)}</p><small>{record.steps} steps · "
+            f"{record.tool_calls} tools · ${record.estimated_cost_usd}</small></article>"
+            for record in records
+        )
+
+    failures = (
+        "".join(
+            f"<li><code>{html.escape(reason)}</code><strong>{count}</strong></li>"
+            for reason, count in summary.failure_reasons.items()
+        )
+        or "<li>None</li>"
     )
-    return (
-        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        f"<title>{html.escape(summary.benchmark_id)} benchmark</title>"
-        "<style>body{font:15px/1.5 system-ui;max-width:1100px;margin:2rem auto;padding:0 1rem}"
-        "table{border-collapse:collapse}th,td{border:1px solid #ccd;padding:.45rem .7rem}"
-        "pre{white-space:pre-wrap;background:#f6f8fa;padding:1rem;border-radius:8px}</style>"
-        "</head><body><h1>PatchPilot Benchmark</h1><table><thead><tr><th>Strategy</th>"
-        f"<th>Runs</th><th>Pass rate</th><th>Avg cost USD</th></tr></thead><tbody>{rows}"
-        f"</tbody></table><pre>{html.escape(markdown)}</pre></body></html>\n"
-    )
+    limitations = "".join(f"<li>{html.escape(item)}</li>" for item in summary.limitations)
+    generated = html.escape(summary.generated_at)
+    benchmark_id = html.escape(summary.benchmark_id)
+    task_hash = html.escape(summary.task_set_sha256)
+    model = html.escape(str(summary.experiment["model"]))
+    prompt_version = html.escape(str(summary.experiment["prompt_version"]))
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{benchmark_id} · PatchPilot Benchmark</title>
+  <style>
+    :root {{ --ink:#172238; --muted:#627085; --line:#dce3ec; --panel:#fff; --bg:#eef3f8;
+      --accent:#315efb; --accent2:#15a37d; }} * {{ box-sizing:border-box; }}
+    body {{ margin:0; font:14px/1.55 Inter,ui-sans-serif,system-ui,sans-serif;
+      color:var(--ink); background:var(--bg); }}
+    main {{ width:min(1200px,calc(100% - 32px)); margin:32px auto 72px; }}
+    header,section {{ border:1px solid var(--line); border-radius:16px; background:var(--panel);
+      box-shadow:0 8px 26px rgba(23,34,56,.06); }} header {{ padding:30px;
+      color:#fff; background:linear-gradient(135deg,#14213d,#315efb); }}
+    section {{ margin-top:18px; padding:24px; }} h1 {{ margin:3px 0 8px;
+      font-size:clamp(28px,5vw,46px); }} h2 {{ margin:0 0 18px; }}
+    code {{ font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }}
+    .eyebrow {{ text-transform:uppercase; letter-spacing:.12em; opacity:.75; font-weight:800; }}
+    .identity {{ opacity:.82; overflow-wrap:anywhere; }}
+    .metrics {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }}
+    .metric {{ padding:16px; border:1px solid var(--line); border-radius:12px; background:#f8fafc; }}
+    .metric strong {{ display:block; font-size:24px; }} .metric span,.muted {{ color:var(--muted); }}
+    .bar-chart {{ display:grid; gap:12px; }} .bar-row {{ display:grid;
+      grid-template-columns:minmax(170px,1.2fr) minmax(180px,4fr) 60px; gap:12px; align-items:center; }}
+    .track {{ height:13px; border-radius:999px; overflow:hidden; background:#e5eaf1; }}
+    .track span {{ display:block; height:100%; border-radius:inherit;
+      background:linear-gradient(90deg,var(--accent),var(--accent2)); }}
+    .table-wrap {{ overflow:auto; }} table {{ width:100%; border-collapse:collapse; }}
+    th,td {{ padding:10px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap; }}
+    th {{ color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-size:12px; }}
+    .groups {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; }}
+    .subpanel {{ padding:16px; border:1px solid var(--line); border-radius:12px; overflow:auto; }}
+    .subpanel h3 {{ margin:0 0 10px; }} .cases {{ display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:12px; }}
+    .case {{ padding:15px; border:1px solid var(--line); border-radius:12px; }}
+    .case div {{ display:flex; justify-content:space-between; gap:8px; }}
+    .case p {{ color:var(--muted); }} .result {{ display:inline-block; margin-top:10px;
+      color:var(--accent2); font-weight:800; }}
+    .failure-list {{ max-width:520px; padding:0; list-style:none; }} .failure-list li {{ display:flex;
+      justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--line); }}
+    @media (max-width:650px) {{ .bar-row {{ grid-template-columns:1fr 55px; }}
+      .bar-row code {{ grid-column:1/-1; }} }}
+    @media (prefers-color-scheme:dark) {{ :root {{ --ink:#e6edf6; --muted:#aeb9c8;
+      --line:#344155; --panel:#172033; --bg:#0f1726; }} .metric {{ background:#101a2b; }}
+      .track {{ background:#303c51; }} }}
+  </style>
+</head>
+<body>
+<main>
+  <header><div class="eyebrow">Offline, reproducible evaluation</div><h1>{benchmark_id}</h1>
+    <p>{model} · prompt {prompt_version} · generated {generated}</p>
+    <p class="identity">Task-set SHA-256: {task_hash}</p></header>
+  <section><h2>Overall metrics</h2><div class="metrics">
+    <div class="metric"><strong>{summary.overall.runs}</strong><span>runs</span></div>
+    <div class="metric"><strong>{summary.overall.pass_rate:.1%}</strong><span>pass rate</span></div>
+    <div class="metric"><strong>{summary.overall.first_gate_pass_rate:.1%}</strong><span>first-gate pass</span></div>
+    <div class="metric"><strong>{summary.overall.average_steps:.2f}</strong><span>average steps</span></div>
+    <div class="metric"><strong>${summary.overall.average_cost_usd:.6f}</strong><span>average estimated cost</span></div>
+    <div class="metric"><strong>{summary.overall.average_wall_time_seconds:.3f}s</strong><span>average wall time</span></div>
+  </div></section>
+  <section><h2>Strategy comparison</h2><div class="bar-chart" role="img" aria-label="Pass rate by Agent strategy">{"".join(strategy_bars)}</div></section>
+  <section><h2>Cost, tokens, and pass rate</h2><div class="table-wrap"><table><thead><tr>
+    <th>Strategy</th><th>Runs</th><th>Pass rate</th><th>First gate</th><th>Avg steps</th>
+    <th>Avg prompt / completion tokens</th><th>Avg cost</th><th>Avg wall</th></tr></thead>
+    <tbody>{"".join(strategy_rows)}</tbody></table></div></section>
+  <section><h2>Category breakdown</h2><div class="groups">
+    <div class="subpanel"><h3>Language</h3><table><tbody>{group_rows(summary.by_language)}</tbody></table></div>
+    <div class="subpanel"><h3>Difficulty</h3><table><tbody>{group_rows(summary.by_difficulty)}</tbody></table></div>
+    <div class="subpanel"><h3>Defect</h3><table><tbody>{group_rows(summary.by_defect)}</tbody></table></div>
+  </div></section>
+  <section><h2>Representative successes</h2><div class="cases">{case_cards(summary.successes, "No successful cases in this run.")}</div></section>
+  <section><h2>Representative failures</h2><div class="cases">{case_cards(summary.failures, "No failed cases in this run.")}</div></section>
+  <section><h2>Failure analysis</h2><ul class="failure-list">{failures}</ul>
+    <p class="muted">In this deterministic fixture run, failures indicate strategy capability limits or deterministic Quality Gate rejection, not random model behavior.</p></section>
+  <section><h2>Conclusions this benchmark cannot support</h2><ul>{limitations}</ul></section>
+</main>
+</body>
+</html>
+"""

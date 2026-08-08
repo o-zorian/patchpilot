@@ -328,11 +328,11 @@ def create_app(
             run_id, ArtifactKind.REPORT_HTML, "text/html", service, owner_id
         )
 
-    @app.get("/health/live")
+    @app.get("/api/v1/health/live")
     async def live() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/health/ready")
+    @app.get("/api/v1/health/ready")
     async def ready(request: Request) -> JSONResponse:
         try:
             async with request.app.state.database.session() as session:
@@ -345,7 +345,7 @@ def create_app(
             status_code=code, content={"status": "ok" if queue_ready else "not_ready"}
         )
 
-    @app.get("/metrics")
+    @app.get("/api/v1/metrics")
     async def metrics(request: Request) -> PlainTextResponse:
         async with request.app.state.database.session() as session:
             result = await session.execute(
@@ -359,7 +359,7 @@ def create_app(
             )
         return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
 
-    @app.get("/metrics/summary")
+    @app.get("/api/v1/metrics/summary")
     async def metrics_summary(request: Request) -> dict[str, int | float | str]:
         async with request.app.state.database.session() as session:
             rows = list((await session.scalars(select(RunRow))).all())

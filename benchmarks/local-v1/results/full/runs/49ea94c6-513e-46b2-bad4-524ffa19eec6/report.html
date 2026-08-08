@@ -1,39 +1,250 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PatchPilot PASSED</title><style>body{font:15px/1.5 system-ui,sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem;color:#18212f}pre{white-space:pre-wrap;background:#f6f8fa;border:1px solid #d0d7de;border-radius:8px;padding:1rem}</style></head><body><h1>PatchPilot result: PASSED</h1><pre># PatchPilot Run 49ea94c6-513e-46b2-bad4-524ffa19eec6
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>PatchPilot PASSED · py-002</title>
+  <style>
+    :root { --ink:#142033; --muted:#5d6a7d; --line:#dbe2ea; --panel:#fff;
+      --bg:#f2f5f8; --accent:#315efb; --good:#087f5b; --bad:#c92a2a; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:14px/1.55 Inter,ui-sans-serif,system-ui,sans-serif;
+      color:var(--ink); background:var(--bg); }
+    main { width:min(1180px,calc(100% - 32px)); margin:32px auto 72px; }
+    header,section { background:var(--panel); border:1px solid var(--line); border-radius:16px;
+      box-shadow:0 8px 28px rgba(20,32,51,.06); }
+    header { padding:28px; background:linear-gradient(135deg,#14213d,#243b6b); color:#fff; }
+    h1 { margin:4px 0 8px; font-size:clamp(26px,4vw,42px); line-height:1.1; }
+    h2 { margin:0 0 18px; font-size:20px; }
+    p { margin:6px 0; }
+    section { padding:24px; margin-top:18px; }
+    code,pre { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
+    pre { margin:10px 0 0; padding:16px; overflow:auto; white-space:pre-wrap;
+      overflow-wrap:anywhere; border-radius:10px; color:#dbe7ff; background:#0d1729; }
+    a { color:var(--accent); }
+    .eyebrow { letter-spacing:.12em; text-transform:uppercase; opacity:.72; font-weight:700; }
+    .status { display:inline-block; margin-top:14px; padding:5px 11px; border-radius:999px;
+      font-weight:800; letter-spacing:.04em; background:#fff; }
+    .status.passed { color:var(--good); } .status.failed { color:var(--bad); }
+    .identity { opacity:.78; overflow-wrap:anywhere; }
+    .metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:12px; }
+    .metric { padding:16px; border:1px solid var(--line); border-radius:12px; background:#f8fafc; }
+    .metric strong { display:block; font-size:23px; } .metric span { color:var(--muted); }
+    .checks { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px;
+      padding:0; list-style:none; }
+    .check { display:grid; grid-template-columns:28px 1fr auto; align-items:center; gap:8px;
+      padding:11px 12px; border:1px solid var(--line); border-radius:10px; }
+    .check-mark { font-size:20px; }
+    .table-wrap { overflow-x:auto; } table { width:100%; border-collapse:collapse; }
+    th,td { padding:10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+    th { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
+    td details { margin-top:5px; } td details pre { max-width:620px; font-size:12px; }
+    .failure { border-left:4px solid var(--bad); padding:10px 14px; background:#fff5f5; }
+    .empty { color:var(--muted); }
+    .artifacts { display:grid; gap:8px; padding:0; list-style:none; }
+    .artifacts li { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px;
+      padding:9px 0; border-bottom:1px solid var(--line); }
+    @media (prefers-color-scheme:dark) { :root { --ink:#e5edf7; --muted:#aeb9c8;
+      --line:#344155; --panel:#172033; --bg:#0f1726; } .metric { background:#101a2b; }
+      .failure { background:#321c24; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Auditable coding-agent run</div>
+    <h1>py-002</h1>
+    <p class="identity">Run 49ea94c6-513e-46b2-bad4-524ffa19eec6</p>
+    <span class="status passed">PASSED</span>
+  </header>
+  <section aria-labelledby="metrics-heading">
+    <h2 id="metrics-heading">Execution metrics</h2>
+    <div class="metrics">
+      <div class="metric"><strong>3</strong><span>steps</span></div>
+      <div class="metric"><strong>3</strong><span>model calls</span></div>
+      <div class="metric"><strong>3</strong><span>tool calls</span></div>
+      <div class="metric"><strong>417</strong><span>tokens</span></div>
+      <div class="metric"><strong>$0.0002835</strong><span>estimated cost</span></div>
+      <div class="metric"><strong>1.685s</strong><span>wall time</span></div>
+    </div>
+  </section>
+  <section><h2>Deterministic Quality Gate</h2><ul class="checks"><li class="check"><span class="check-mark">✓</span><span>Has Patch</span><strong>PASS</strong></li><li class="check"><span class="check-mark">✓</span><span>Scope Valid</span><strong>PASS</strong></li><li class="check"><span class="check-mark">✓</span><span>Patch Size Valid</span><strong>PASS</strong></li><li class="check"><span class="check-mark">✓</span><span>Tests Passed</span><strong>PASS</strong></li><li class="check"><span class="check-mark">✓</span><span>Required Tests Ran</span><strong>PASS</strong></li><li class="check"><span class="check-mark">✓</span><span>Budget Valid</span><strong>PASS</strong></li></ul></section>
+  <section><h2>Run timeline</h2><div class="table-wrap"><table><thead><tr><th>#</th><th>Event</th><th>Timestamp</th><th>Duration</th><th>Details</th></tr></thead><tbody><tr><td>1</td><td><code>run.created</code></td><td>2026-08-08T17:20:32.100104Z</td><td>—</td><td>Structured event recorded<details><summary>Payload</summary><pre>{
+  &quot;task_id&quot;: &quot;py-002&quot;,
+  &quot;model&quot;: &quot;scripted-benchmark-v1&quot;,
+  &quot;prompt_version&quot;: &quot;m2-v1&quot;
+}</pre></details></td></tr><tr><td>2</td><td><code>workspace.ready</code></td><td>2026-08-08T17:20:32.104609Z</td><td>—</td><td>Structured event recorded<details><summary>Payload</summary><pre>{
+  &quot;workspace_id&quot;: &quot;49ea94c6-513e-46b2-bad4-524ffa19eec6&quot;,
+  &quot;baseline_commit&quot;: &quot;15079b154c6ff52b8b23ae239c2f43a5ba88fde2&quot;,
+  &quot;initial_git_status&quot;: &quot;&quot;
+}</pre></details></td></tr><tr><td>3</td><td><code>model.requested</code></td><td>2026-08-08T17:20:32.108454Z</td><td>—</td><td>Structured event recorded<details><summary>Payload</summary><pre>{
+  &quot;request_sequence&quot;: 1,
+  &quot;attempt&quot;: 1,
+  &quot;model&quot;: &quot;scripted-benchmark-v1&quot;,
+  &quot;message_count&quot;: 2,
+  &quot;tool_schema_count&quot;: 5
+}</pre></details></td></tr><tr><td>4</td><td><code>model.responded</code></td><td>2026-08-08T17:20:32.111671Z</td><td>0 ms</td><td>status=completed; finish_reason=tool_calls; prompt_tokens=107; completion_tokens=25<details><summary>Payload</summary><pre>{
+  &quot;request_sequence&quot;: 1,
+  &quot;attempt&quot;: 1,
+  &quot;model&quot;: &quot;scripted-benchmark-v1&quot;,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;error_code&quot;: null,
+  &quot;finish_reason&quot;: &quot;tool_calls&quot;,
+  &quot;provider_request_id&quot;: &quot;offline-1&quot;,
+  &quot;prompt_tokens&quot;: 107,
+  &quot;completion_tokens&quot;: 25,
+  &quot;total_tokens&quot;: 132,
+  &quot;usage_estimated&quot;: false,
+  &quot;estimated_cost_usd&quot;: &quot;0.000091&quot;
+}</pre></details></td></tr><tr><td>5</td><td><code>tool.requested</code></td><td>2026-08-08T17:20:32.113579Z</td><td>—</td><td>tool=read_file<details><summary>Payload</summary><pre>{
+  &quot;request_sequence&quot;: 1,
+  &quot;tool_call_id&quot;: &quot;read&quot;,
+  &quot;tool&quot;: &quot;read_file&quot;,
+  &quot;input_summary&quot;: &quot;sha256=0d7603b8e2c6aff2d1f141ea1ea7a8e4c67c8e0750b67c4a895d9f2138a1d1b9; chars=49; keys=end_line,path,start_line&quot;
+}</pre></details></td></tr><tr><td>6</td><td><code>tool.started</code></td><td>2026-08-08T17:20:32.115402Z</td><td>—</td><td>tool=read_file<details><summary>Payload</summary><pre>{
+  &quot;request_sequence&quot;: 1,
+  &quot;tool_call_id&quot;: &quot;read&quot;,
+  &quot;tool&quot;: &quot;read_file&quot;
+}</pre></details></td></tr><tr><td>7</td><td><code>tool.completed</code></td><td>2026-08-08T17:20:32.118498Z</td><td>1 ms</td><td>tool=read_file; status=completed<details><summary>Payload</summary><pre>{
+  &quot;request_sequence&quot;: 1,
+  &quot;tool_call_id&quot;: &quot;read&quot;,
+  &quot;tool&quot;: &quot;read_file&quot;,
+  &quot;input_summary&quot;: &quot;sha256=0d7603b8e2c6aff2d1f141ea1ea7a8e4c67c8e0750b67c4a895d9f2138a1d1b9; chars=49; keys=end_line,path,start_line&quot;,
+  &quot;output_summary&quot;: &quot;read cases.py lines 1-53&quot;,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;error_code&quot;: null,
+  &quot;truncated&quot;: false
+}</pre></details></td></tr><tr><td>8</td><td><code>model.requested</code></td><td>2026-08-08T17:20:32.122529Z</td><td>—</td><td>Structured event recorded<details><summary>Payload</summary><pre>{
+  &quot;request_sequence&quot;: 2,
+  &quot;attempt&quot;: 1,
+  &quot;model&quot;: &quot;scripted-benchmark-v1&quot;,
+  &quot;message_count&quot;: 4,
+  &quot;tool_schema_count&quot;: 5
+}</pre></details></td></tr><tr><td>9</td><td><code>model.responded</code></td><td>2026-08-08T17:20:32.125887Z</td><td>0 ms</td><td>status=completed; finish_reason=tool_calls; prompt_tokens=114; completion_tokens=25<details><summary>Payload</summary><pre>{
+  &quot;request_sequence&quot;: 2,
+  &quot;attempt&quot;: 1,
+  &quot;model&quot;: &quot;scripted-benchmark-v1&quot;,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;error_code&quot;: null,
+  &quot;finish_reason&quot;: &quot;tool_calls&quot;,
+  &quot;provider_request_id&quot;: &quot;offline-2&quot;,
+  &quot;prompt_tokens&quot;: 114,
+  &quot;completion_tokens&quot;: 25,
+  &quot;total_tokens&quot;: 139,
+  &quot;usage_estimated&quot;: false,
+  &quot;estimated_cost_usd&quot;: &quot;0.0000945&quot;
+}</pre></details></td></tr><tr><td>10</td><td><code>tool.requested</code></td><td>2026-08-08T17:20:32.128215Z</td><td>—</td><td>tool=apply_patch<details><summary>Payload</summary><pre>{
+  &quot;request_sequence&quot;: 2,
+  &quot;tool_call_id&quot;: &quot;patch&quot;,
+  &quot;tool&quot;: &quot;apply_patch&quot;,
+  &quot;input_summary&quot;: &quot;sha256=521a3f71f5bde396956294b917e53bce9314f8eca77c1eca8b0c9d4437e5e795; chars=217; keys=patch&quot;
+}</pre></details></td></tr><tr><td>11</td><td><code>tool.started</code></td><td>2026-08-08T17:20:32.130372Z</td><td>—</td><td>tool=apply_patch<details><summary>Payload</summary><pre>{
+  &quot;request_sequence&quot;: 2,
+  &quot;tool_call_id&quot;: &quot;patch&quot;,
+  &quot;tool&quot;: &quot;apply_patch&quot;
+}</pre></details></td></tr><tr><td>12</td><td><code>tool.completed</code></td><td>2026-08-08T17:20:32.710811Z</td><td>578 ms</td><td>tool=apply_patch; status=completed<details><summary>Payload</summary><pre>{
+  &quot;request_sequence&quot;: 2,
+  &quot;tool_call_id&quot;: &quot;patch&quot;,
+  &quot;tool&quot;: &quot;apply_patch&quot;,
+  &quot;input_summary&quot;: &quot;sha256=521a3f71f5bde396956294b917e53bce9314f8eca77c1eca8b0c9d4437e5e795; chars=217; keys=patch&quot;,
+  &quot;output_summary&quot;: &quot;applied patch to 1 files&quot;,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;error_code&quot;: null,
+  &quot;truncated&quot;: false
+}</pre></details></td></tr><tr><td>13</td><td><code>model.requested</code></td><td>2026-08-08T17:20:32.715881Z</td><td>—</td><td>Structured event recorded<details><summary>Payload</summary><pre>{
+  &quot;request_sequence&quot;: 3,
+  &quot;attempt&quot;: 1,
+  &quot;model&quot;: &quot;scripted-benchmark-v1&quot;,
+  &quot;message_count&quot;: 6,
+  &quot;tool_schema_count&quot;: 5
+}</pre></details></td></tr><tr><td>14</td><td><code>model.responded</code></td><td>2026-08-08T17:20:32.720035Z</td><td>0 ms</td><td>status=completed; finish_reason=tool_calls; prompt_tokens=121; completion_tokens=25<details><summary>Payload</summary><pre>{
+  &quot;request_sequence&quot;: 3,
+  &quot;attempt&quot;: 1,
+  &quot;model&quot;: &quot;scripted-benchmark-v1&quot;,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;error_code&quot;: null,
+  &quot;finish_reason&quot;: &quot;tool_calls&quot;,
+  &quot;provider_request_id&quot;: &quot;offline-3&quot;,
+  &quot;prompt_tokens&quot;: 121,
+  &quot;completion_tokens&quot;: 25,
+  &quot;total_tokens&quot;: 146,
+  &quot;usage_estimated&quot;: false,
+  &quot;estimated_cost_usd&quot;: &quot;0.000098&quot;
+}</pre></details></td></tr><tr><td>15</td><td><code>tool.requested</code></td><td>2026-08-08T17:20:32.722688Z</td><td>—</td><td>tool=finish<details><summary>Payload</summary><pre>{
+  &quot;request_sequence&quot;: 3,
+  &quot;tool_call_id&quot;: &quot;finish&quot;,
+  &quot;tool&quot;: &quot;finish&quot;,
+  &quot;input_summary&quot;: &quot;sha256=f80374607653fdaeed6443cecafc99efb3dcb69c4f5be82a91570faa3458dcfa; chars=135; keys=remaining_risks,summary,tests_run&quot;
+}</pre></details></td></tr><tr><td>16</td><td><code>tool.started</code></td><td>2026-08-08T17:20:32.724906Z</td><td>—</td><td>tool=finish<details><summary>Payload</summary><pre>{
+  &quot;request_sequence&quot;: 3,
+  &quot;tool_call_id&quot;: &quot;finish&quot;,
+  &quot;tool&quot;: &quot;finish&quot;
+}</pre></details></td></tr><tr><td>17</td><td><code>tool.completed</code></td><td>2026-08-08T17:20:32.727647Z</td><td>0 ms</td><td>tool=finish; status=completed<details><summary>Payload</summary><pre>{
+  &quot;request_sequence&quot;: 3,
+  &quot;tool_call_id&quot;: &quot;finish&quot;,
+  &quot;tool&quot;: &quot;finish&quot;,
+  &quot;input_summary&quot;: &quot;sha256=f80374607653fdaeed6443cecafc99efb3dcb69c4f5be82a91570faa3458dcfa; chars=135; keys=remaining_risks,summary,tests_run&quot;,
+  &quot;output_summary&quot;: &quot;finish request accepted for later Quality Gate evaluation&quot;,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;error_code&quot;: null,
+  &quot;truncated&quot;: false
+}</pre></details></td></tr><tr><td>18</td><td><code>quality_gate.started</code></td><td>2026-08-08T17:20:32.730216Z</td><td>—</td><td>Structured event recorded<details><summary>Payload</summary><pre>{
+  &quot;attempt&quot;: 1
+}</pre></details></td></tr><tr><td>19</td><td><code>quality_gate.passed</code></td><td>2026-08-08T17:20:33.826766Z</td><td>1054 ms</td><td>result=PASSED<details><summary>Payload</summary><pre>{
+  &quot;attempt&quot;: 1,
+  &quot;result&quot;: &quot;PASSED&quot;,
+  &quot;changed_files&quot;: 1,
+  &quot;added_lines&quot;: 2,
+  &quot;deleted_lines&quot;: 0,
+  &quot;failed_tests&quot;: []
+}</pre></details></td></tr><tr><td>20</td><td><code>run.completed</code></td><td>2026-08-08T17:20:33.828914Z</td><td>—</td><td>status=passed<details><summary>Payload</summary><pre>{
+  &quot;status&quot;: &quot;passed&quot;,
+  &quot;result_code&quot;: &quot;PASSED&quot;,
+  &quot;steps&quot;: 3,
+  &quot;tool_calls&quot;: 3,
+  &quot;gate_attempts&quot;: 1
+}</pre></details></td></tr></tbody></table></div></section>
+  <section><h2>Git diff</h2><p class="empty">1 changed files · +2/-0 lines</p><pre>diff --git a/cases.py b/cases.py
+index fc436c5..dc1bc2b 100644
+--- a/cases.py
++++ b/cases.py
+@@ -9,6 +9,8 @@ def clamp_page(page: int) -&gt; int:
 
-- Task: `py-002`
-- Result: **PASSED**
 
-## Quality checks
+ def first_or_none(values: list[str]) -&gt; str | None:
++    if not values:
++        return None
+     return values[0]
 
-- has_patch: PASS
-- scope_valid: PASS
-- patch_size_valid: PASS
-- tests_passed: PASS
-- required_tests_ran: PASS
-- budget_valid: PASS
 
-## Metrics
+</pre></section>
+  <section><h2>Acceptance test result</h2><pre>command_id: acceptance:0
+exit_code: 0
+timed_out: false
+duration_ms: 713
+truncated: false
+executed_tests: [&quot;benchmarks.local-v1.results.full..work.workspaces.49ea94c6-513e-46b2-bad4-524ffa19eec6.test_patchpilot_hidden::test_empty_sequence_returns_none&quot;, &quot;test_empty_sequence_returns_none&quot;]
+failed_tests: []
+system_error:
+stdout:
+============================= test session starts =============================
+platform win32 -- Python 3.14.6, pytest-9.1.1, pluggy-1.6.0
+rootdir: D:\materials\work\patchpilot
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
 
-- Steps: 3
-- Model calls: 3
-- Tool calls: 3
-- Changed files: 1
-- Patch lines: +2/-0
-- Tokens: 342 prompt / 75 completion
-- Estimated cost: $0.0002835
-- Wall time: 1.685s
+test_patchpilot_hidden.py .                                              [100%]
 
-## Failures
+- generated xml file: D:\materials\work\patchpilot\benchmarks\local-v1\results\full\.work\workspaces\49ea94c6-513e-46b2-bad4-524ffa19eec6\.patchpilot-junit-0-3a1cce48fd354dcb80d07641c09eb1fe.xml -
+============================== 1 passed in 0.13s ==============================
 
-- None
-
-## Artifacts
-
-- patch: `49ea94c6-513e-46b2-bad4-524ffa19eec6/final.patch`
-- events: `49ea94c6-513e-46b2-bad4-524ffa19eec6/events.jsonl`
-- test_log: `49ea94c6-513e-46b2-bad4-524ffa19eec6/test.log`
-- scorecard: `49ea94c6-513e-46b2-bad4-524ffa19eec6/scorecard.json`
-- report_markdown: `49ea94c6-513e-46b2-bad4-524ffa19eec6/report.md`
-- report_html: `49ea94c6-513e-46b2-bad4-524ffa19eec6/report.html`
-</pre></body></html>
+stderr:
+</pre></section>
+  <section><h2>Failure history</h2><p class="empty">No Quality Gate failures were recorded.</p></section>
+  <section><h2>Integrity-indexed artifacts</h2><ul class="artifacts"><li><a href="final.patch">patch</a><code>49ea94c6-513e-46b2-bad4-524ffa19eec6/final.patch</code></li><li><a href="events.jsonl">events</a><code>49ea94c6-513e-46b2-bad4-524ffa19eec6/events.jsonl</code></li><li><a href="test.log">test_log</a><code>49ea94c6-513e-46b2-bad4-524ffa19eec6/test.log</code></li><li><a href="scorecard.json">scorecard</a><code>49ea94c6-513e-46b2-bad4-524ffa19eec6/scorecard.json</code></li><li><a href="report.md">report_markdown</a><code>49ea94c6-513e-46b2-bad4-524ffa19eec6/report.md</code></li><li><a href="report.html">report_html</a><code>49ea94c6-513e-46b2-bad4-524ffa19eec6/report.html</code></li></ul></section>
+</main>
+</body>
+</html>

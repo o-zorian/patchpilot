@@ -52,6 +52,7 @@ class AppSettings(BaseSettings):
     tool_max_file_bytes: int = Field(default=1_048_576, gt=0)
 
     model_base_url: str = "https://api.openai.com/v1"
+    patchpilot_enable_real_model: bool = False
     model_api_key: SecretStr | None = None
     model_name: str | None = None
     model_temperature: float = Field(default=0, ge=0, le=2)
@@ -93,6 +94,10 @@ class AppSettings(BaseSettings):
         self.workspace_root.expanduser().resolve().mkdir(parents=True, exist_ok=True)
 
     def real_model_config(self) -> ModelConfig:
+        if not self.patchpilot_enable_real_model:
+            raise SettingsError(
+                "PATCHPILOT_ENABLE_REAL_MODEL=true is required for real model execution"
+            )
         if not self.model_name:
             raise SettingsError("MODEL_NAME is required for the real model client")
         if self.model_api_key is None or not self.model_api_key.get_secret_value():

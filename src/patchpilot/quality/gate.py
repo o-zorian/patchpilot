@@ -659,7 +659,17 @@ class QualityGate:
             artifacts=artifact_refs,
         )
         await self.artifacts.write_text(ArtifactKind.REPORT_MARKDOWN, render_markdown(scorecard))
-        await self.artifacts.write_text(ArtifactKind.REPORT_HTML, render_html(scorecard))
+        event_path = self.artifacts.path_for(ArtifactKind.EVENT_LOG)
+        events_jsonl = event_path.read_text(encoding="utf-8") if event_path.is_file() else ""
+        await self.artifacts.write_text(
+            ArtifactKind.REPORT_HTML,
+            render_html(
+                scorecard,
+                patch=patch,
+                test_log=test_log,
+                events_jsonl=events_jsonl,
+            ),
+        )
         await self.artifacts.write_text(
             ArtifactKind.SCORECARD,
             scorecard.model_dump_json(indent=2) + "\n",

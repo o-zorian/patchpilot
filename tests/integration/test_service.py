@@ -178,12 +178,12 @@ async def test_api_worker_idempotency_events_artifacts_and_workspace_isolation(
                 assert forbidden.status_code == 403
                 assert forbidden.json()["error"]["code"] == "FORBIDDEN"
 
-                metrics = await api.get("/metrics")
+                metrics = await api.get("/api/v1/metrics")
                 assert 'patchpilot_runs{status="passed"} 1' in metrics.text
-                summary = await api.get("/metrics/summary")
+                summary = await api.get("/api/v1/metrics/summary")
                 assert summary.json()["success_rate"] == 1.0
-                assert (await api.get("/health/live")).status_code == 200
-                assert (await api.get("/health/ready")).status_code == 200
+                assert (await api.get("/api/v1/health/live")).status_code == 200
+                assert (await api.get("/api/v1/health/ready")).status_code == 200
 
                 pending = await api.post(
                     "/api/v1/runs",

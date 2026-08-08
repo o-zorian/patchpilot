@@ -41,6 +41,10 @@ async def test_minimal_benchmark_is_offline_isolated_and_writes_all_reports(
     assert not (tmp_path / "result" / ".work").exists()
     for name in ("raw.jsonl", "summary.json", "report.md", "report.html"):
         assert (tmp_path / "result" / name).is_file()
+    report_html = (tmp_path / "result" / "report.html").read_text(encoding="utf-8")
+    assert "Strategy comparison" in report_html
+    assert 'aria-label="Pass rate by Agent strategy"' in report_html
+    assert "Cost, tokens, and pass rate" in report_html
 
     record = result.records[0]
     event_path = tmp_path / "result" / record.artifact_directory / "events.jsonl"

@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  PATCHPILOT_ENABLE_REAL_MODEL: "false"
+  MODEL_API_KEY: ""
+  MODEL_NAME: ""
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install project and development tools
+        run: python -m pip install -e ".[dev]"
+      - name: Verify formatting
+        run: python -m ruff format --check .
+      - name: Lint
+        run: python -m ruff check .
+      - name: Type check
+        run: python -m mypy
+      - name: Run deterministic test suite
+        run: python -m pytest -m "not docker"
+      - name: Validate benchmark manifest
+        run: patchpilot benchmark validate benchmarks/local-v1 --json
+      - name: Run one offline Benchmark task
+        run: >-
+          patchpilot benchmark run benchmarks/local-v1
+          --output /tmp/patchpilot-minimal-benchmark
+          --strategy full --limit 1 --concurrency 1 --json
+      - name: Build wheel without executing a real model
+        run: python -m pip wheel . --no-deps --wheel-dir dist
+      - name: Check installed dependencies
+        run: python -m pip check
+
+  docker-sandbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install project and development tools
+        run: python -m pip install -e ".[dev]"
+      - name: Build isolated language images
+        run: |
+          docker build -t patchpilot-python:latest -f docker/python/Dockerfile .
+          docker build -t patchpilot-go:latest -f docker/go/Dockerfile .
+      - name: Verify real Docker isolation
+        env:
+          PATCHPILOT_RUN_DOCKER_TESTS: "1"
+          SANDBOX_DOCKER_BINARY: docker
+        run: python -m pytest -m docker

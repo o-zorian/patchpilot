@@ -134,11 +134,15 @@ def test_model_cost_uses_separate_input_and_output_rates() -> None:
 
 
 def test_real_model_settings_are_explicit_and_keep_the_key_secret() -> None:
-    with pytest.raises(SettingsError, match="MODEL_NAME"):
+    with pytest.raises(SettingsError, match="PATCHPILOT_ENABLE_REAL_MODEL"):
         AppSettings(_env_file=None).real_model_config()
+
+    with pytest.raises(SettingsError, match="MODEL_NAME"):
+        AppSettings(_env_file=None, patchpilot_enable_real_model=True).real_model_config()
 
     settings = AppSettings(
         _env_file=None,
+        patchpilot_enable_real_model=True,
         model_name="configured-model",
         model_api_key="configured-secret",
     )

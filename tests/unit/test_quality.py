@@ -86,13 +86,37 @@ def test_scorecard_markdown_and_html_are_deterministic_and_escaped() -> None:
     )
 
     markdown = render_markdown(scorecard)
-    html = render_html(scorecard)
+    events = json.dumps(
+        {
+            "sequence": 1,
+            "type": "tool.completed",
+            "timestamp": "2026-08-09T00:00:00Z",
+            "duration_ms": 4,
+            "payload": {"tool": "read_file", "summary": "read <script>"},
+        }
+    )
+    html = render_html(
+        scorecard,
+        patch="+<script>alert(2)</script>",
+        test_log="1 passed",
+        events_jsonl=events,
+    )
 
     assert "Result: **PASSED**" in markdown
     assert "task-<script>" in markdown
     assert "<script>" not in html
     assert "&lt;script&gt;" in html
-    assert html == render_html(scorecard)
+    assert "Run timeline" in html
+    assert "Git diff" in html
+    assert "Acceptance test result" in html
+    assert "read_file" in html
+    assert "1 passed" in html
+    assert html == render_html(
+        scorecard,
+        patch="+<script>alert(2)</script>",
+        test_log="1 passed",
+        events_jsonl=events,
+    )
     assert isinstance(
         json.loads(scorecard.model_dump_json())["metrics"]["estimated_cost_usd"], float
     )

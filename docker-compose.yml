@@ -1,0 +1,35 @@
+name: patchpilot
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: patchpilot
+      POSTGRES_USER: patchpilot
+      POSTGRES_PASSWORD: patchpilot
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U patchpilot -d patchpilot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - patchpilot-postgres:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - patchpilot-redis:/data
+
+volumes:
+  patchpilot-postgres:
+  patchpilot-redis:
