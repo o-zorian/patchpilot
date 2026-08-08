@@ -6,9 +6,12 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from patchpilot.profiles.go import GO_IGNORED_DIRECTORIES
 from patchpilot.profiles.python import PYTHON_IGNORED_DIRECTORIES
 from patchpilot.sandbox.workspace import PathPolicyError, is_sensitive_logical_path
 from patchpilot.tools.base import ToolContext, ToolResult, failure, path_failure, success
+
+_IGNORED_DIRECTORIES = PYTHON_IGNORED_DIRECTORIES | GO_IGNORED_DIRECTORIES
 
 
 class ListFilesInput(BaseModel):
@@ -56,7 +59,7 @@ def iter_workspace_files(
             continue
         for entry in entries:
             logical = _logical_child(logical_directory, entry.name)
-            if entry.name in PYTHON_IGNORED_DIRECTORIES or is_sensitive_logical_path(logical):
+            if entry.name in _IGNORED_DIRECTORIES or is_sensitive_logical_path(logical):
                 continue
             try:
                 resolved = context.path_policy.resolve(

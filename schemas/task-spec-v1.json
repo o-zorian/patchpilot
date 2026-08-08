@@ -8,7 +8,7 @@
             "type": "string"
           },
           "maxItems": 32,
-          "minItems": 3,
+          "minItems": 2,
           "title": "Argv",
           "type": "array"
         },
@@ -181,7 +181,10 @@
           "type": "string"
         },
         "language": {
-          "const": "python",
+          "enum": [
+            "python",
+            "go"
+          ],
           "title": "Language",
           "type": "string"
         }

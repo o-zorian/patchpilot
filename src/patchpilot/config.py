@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -37,6 +38,12 @@ class AppSettings(BaseSettings):
     worker_cancel_poll_seconds: float = Field(default=0.1, gt=0)
     artifact_root: Path = Path("./artifacts")
     workspace_root: Path = Path("./workspaces")
+    sandbox_mode: Literal["docker", "local"] = "docker"
+    allow_trusted_local_execution: bool = False
+    sandbox_docker_binary: str = Field(default="docker", min_length=1, max_length=255)
+    sandbox_image_python: str = Field(default="patchpilot-python:latest", min_length=1)
+    sandbox_image_go: str = Field(default="patchpilot-go:latest", min_length=1)
+    sandbox_pids_limit: int = Field(default=128, gt=0, le=4_096)
     log_level: str = "INFO"
     tool_output_max_chars: int = Field(default=20_000, gt=0)
     tool_list_max_files: int = Field(default=1_000, gt=0)

@@ -8,7 +8,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from patchpilot.domain.task import TaskLimits, TaskSpecLoadError, load_task_spec
+from patchpilot.domain.task import TaskLimits, TaskSpec, TaskSpecLoadError, load_task_spec
 
 
 def write_task(path: Path, data: dict[str, Any]) -> Path:
@@ -40,6 +40,39 @@ def test_loads_valid_json(
     assert load_task_spec(path, task_limits).spec.version == "1"
 
 
+def test_accepts_bounded_go_test_and_vet_commands(valid_task_data: dict[str, Any]) -> None:
+    valid_task_data["repository"]["language"] = "go"
+    valid_task_data["acceptance"] = {
+        "commands": [
+            {"argv": ["go", "test", "./..."], "timeout_seconds": 120},
+            {"argv": ["go", "vet", "./internal/service"], "timeout_seconds": 120},
+        ],
+        "required_tests": ["TestListItemsPageZero"],
+    }
+
+    spec = TaskSpec.model_validate(valid_task_data)
+
+    assert spec.repository.language == "go"
+    assert spec.acceptance.commands[0].argv == ["go", "test", "./..."]
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["go", "test", "-run", "TestOnly"],
+        ["go", "test", "../outside"],
+        ["go", "get", "example.com/dependency"],
+        ["sh", "-c", "go test ./..."],
+    ],
+)
+def test_rejects_unsafe_go_commands(valid_task_data: dict[str, Any], argv: list[str]) -> None:
+    valid_task_data["repository"]["language"] = "go"
+    valid_task_data["acceptance"]["commands"][0]["argv"] = argv
+
+    with pytest.raises(ValidationError):
+        TaskSpec.model_validate(valid_task_data)
+
+
 @pytest.mark.parametrize(
     ("mutate", "message"),
     [
@@ -54,7 +87,7 @@ def test_loads_valid_json(
             "unsafe or unsupported",
         ),
         (lambda data: data["budget"].update(max_steps=0), "greater than 0"),
-        (lambda data: data["repository"].update(language="go"), "Input should be 'python'"),
+        (lambda data: data["repository"].update(language="go"), "Go profile accepts"),
         (lambda data: data["execution"].update(network=True), "Input should be False"),
     ],
 )

@@ -12,6 +12,7 @@ from patchpilot.persistence.database import Database
 from patchpilot.persistence.migrations import upgrade_database
 from patchpilot.persistence.repositories import RunRepository
 from patchpilot.queue import RedisRunQueue, RunQueue
+from patchpilot.sandbox.factory import ensure_sandbox_runtime
 from patchpilot.services import RunExecutor
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,7 @@ class RunWorker:
 async def _serve(settings: AppSettings) -> None:
     settings = settings.model_copy(update={"database_url": settings.postgres_database_url})
     settings.ensure_runtime_directories()
+    ensure_sandbox_runtime(settings)
     await asyncio.to_thread(upgrade_database, settings.database_url)
     database = Database(settings.database_url)
     queue = RedisRunQueue(settings.redis_url, settings.redis_queue_name)

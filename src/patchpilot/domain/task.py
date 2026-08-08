@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 TASK_SPEC_VERSION = "1"
 _ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
 _PYTEST_SELECTOR_PATTERN = re.compile(r"^[A-Za-z0-9_./:\[\]\\-]+$")
+_GO_PACKAGE_PATTERN = re.compile(r"^\./(?:[A-Za-z0-9_.-]+/)*(?:[A-Za-z0-9_.-]+|\.\.\.)$")
 
 
 class TaskSpecLoadError(ValueError):
@@ -26,22 +27,23 @@ class RepositorySpec(BaseModel):
 
     path: str = Field(min_length=1)
     base_ref: str = Field(default="HEAD", min_length=1, max_length=255)
-    language: Literal["python"]
+    language: Literal["python", "go"]
 
 
 class AcceptanceCommand(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    argv: list[str] = Field(min_length=3, max_length=32)
+    argv: list[str] = Field(min_length=2, max_length=32)
     timeout_seconds: int = Field(gt=0)
 
     @field_validator("argv")
     @classmethod
-    def validate_python_pytest_command(cls, argv: list[str]) -> list[str]:
-        if argv[:3] != ["python", "-m", "pytest"]:
-            raise ValueError("the Python profile accepts only: python -m pytest")
-        for selector in argv[3:]:
-            validate_pytest_selector(selector)
+    def validate_argv_shape(cls, argv: list[str]) -> list[str]:
+        if any(not argument or "\x00" in argument for argument in argv):
+            raise ValueError("acceptance argv must contain non-empty, NUL-free arguments")
+        forbidden = {"bash", "sh", "cmd", "powershell", "pwsh"}
+        if Path(argv[0]).name.lower().removesuffix(".exe") in forbidden:
+            raise ValueError("shell interpreters are not accepted by language profiles")
         return argv
 
 
@@ -124,6 +126,30 @@ def validate_pytest_selector(selector: str) -> str:
     return normalized
 
 
+def validate_go_package(package: str) -> str:
+    normalized = package.replace("\\", "/")
+    if not _GO_PACKAGE_PATTERN.fullmatch(normalized) or ".." in PurePosixPath(normalized).parts:
+        raise ValueError(f"unsafe or unsupported Go package path: {package!r}")
+    return normalized
+
+
+def _validate_acceptance_profile(spec: TaskSpec) -> None:
+    for command in spec.acceptance.commands:
+        argv = command.argv
+        if spec.repository.language == "python":
+            if argv[:3] != ["python", "-m", "pytest"]:
+                raise ValueError("the Python profile accepts only: python -m pytest")
+            for selector in argv[3:]:
+                validate_pytest_selector(selector)
+            continue
+        if argv[:2] not in (["go", "test"], ["go", "vet"]):
+            raise ValueError("the Go profile accepts only go test or go vet")
+        if len(argv) < 3:
+            raise ValueError("Go test and vet commands require at least one package path")
+        for package in argv[2:]:
+            validate_go_package(package)
+
+
 class TaskSpec(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -165,6 +191,7 @@ class TaskSpec(BaseModel):
     def require_git_denial(self) -> TaskSpec:
         if ".git/**" not in self.denied_paths:
             raise ValueError("denied_paths must include the mandatory .git/** pattern")
+        _validate_acceptance_profile(self)
         return self
 
 

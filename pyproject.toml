@@ -45,6 +45,9 @@ packages = ["src/patchpilot"]
 addopts = "-ra --strict-config --strict-markers"
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+  "docker: requires real Docker Desktop isolation and prebuilt PatchPilot images",
+]
 
 [tool.ruff]
 line-length = 100

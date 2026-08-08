@@ -1,0 +1,9 @@
+.git
+.mypy_cache
+.pytest_cache
+.ruff_cache
+artifacts
+data
+workspaces
+__pycache__
+*.pyc

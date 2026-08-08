@@ -1,7 +1,7 @@
 # PatchPilot
 
 PatchPilot is a controlled and auditable coding-agent harness. This repository currently
-contains milestones M0 through M4: the versioned task protocol and persistence skeleton,
+contains milestones M0 through M5: the versioned task protocol and persistence skeleton,
 independent trusted-local Workspaces, controlled tools, an OpenAI-compatible model boundary,
 offline scripted models, a project-owned Agent Loop, and deterministic Quality Gate reports.
 
@@ -88,5 +88,34 @@ Loop and deterministic Quality Gate. The CLI command `patchpilot run execute` in
 same execution path in foreground mode.
 
 SQLite and `InMemoryRunQueue` remain supported for local automated tests. Production API and
-Worker entry points select PostgreSQL and Redis. M4 does not add Docker sandboxing, Go, or
-Benchmark execution; trusted-local execution remains limited to project-owned repositories.
+Worker entry points select PostgreSQL and Redis.
+
+## M5 Docker Sandbox and Go
+
+Unknown repository commands now run only in a fresh Docker container per command. The
+production default is `SANDBOX_MODE=docker`; local execution requires the explicit
+`ALLOW_TRUSTED_LOCAL_EXECUTION=true` opt-in and is reserved for project-owned fixtures. Build
+the two pinned runtime profiles locally:
+
+```text
+docker build --pull -t patchpilot-python:latest -f docker/python/Dockerfile .
+docker build --pull -t patchpilot-go:latest -f docker/go/Dockerfile .
+```
+
+Each container is non-root, networkless, capability-free, read-only outside its single
+Workspace bind mount, and constrained by the TaskSpec CPU/memory limits plus a process limit.
+Containers are force-removed after normal completion, cancellation, or timeout. Only a fixed
+environment allowlist enters the container; model credentials and the Docker socket are never
+mounted. Python keeps its temporary filesystem `noexec`; Go receives an executable temporary
+filesystem because `go test` launches its compiled test binary there.
+
+The Go profile accepts only bounded `go test` and `go vet` commands. Its `gofmt` tool derives
+arguments from the Git diff and can modify only changed, in-scope `.go` files. CLI, API, and
+Worker continue to use the same `RunExecutor`, Agent Loop, Sandbox factory, and deterministic
+Quality Gate. M5 does not implement benchmark orchestration or any M6 functionality.
+
+Real isolation tests are opt-in so the normal test suite never silently depends on Docker:
+
+```text
+PATCHPILOT_RUN_DOCKER_TESTS=1 SANDBOX_DOCKER_BINARY=docker pytest -m docker
+```

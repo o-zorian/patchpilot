@@ -8,6 +8,7 @@ from typing import Any
 
 from patchpilot.domain.cancellation import CancellationToken
 from patchpilot.domain.task import TaskSpec
+from patchpilot.sandbox.trusted_local import TrustedLocalSandbox
 from patchpilot.sandbox.workspace import WorkspaceManager
 from patchpilot.tools.base import ToolContext, ToolLimits
 from patchpilot.tools.files import ListFilesInput, ListFilesTool, ReadFileInput, ReadFileTool
@@ -54,6 +55,7 @@ def make_context(
         workspace,
         spec,
         ToolLimits(output_max_chars=20_000, max_file_bytes=1_000_000),
+        command_sandbox=TrustedLocalSandbox(),
     )
     return context, repository
 
@@ -118,6 +120,7 @@ def test_out_of_scope_and_over_budget_patches_are_atomic(
         context.workspace,
         TaskSpec.model_validate(budget_data),
         context.limits,
+        command_sandbox=context.command_sandbox,
     )
     oversized_patch = """diff --git a/calculator.py b/calculator.py
 --- a/calculator.py
@@ -305,6 +308,7 @@ def test_test_cancellation_terminates_process_tree(
         context.task_spec,
         context.limits,
         cancellation_token=token,
+        command_sandbox=context.command_sandbox,
     )
     timer = threading.Timer(0.25, token.cancel)
     timer.start()

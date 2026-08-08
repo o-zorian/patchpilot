@@ -73,6 +73,8 @@ class RunRow(Base):
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     worker_id: Mapped[str | None] = mapped_column(String(255), index=True)
+    sandbox_mode: Mapped[str | None] = mapped_column(String(32))
+    sandbox_image: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 

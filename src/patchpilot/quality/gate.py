@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import tempfile
+import re
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -24,9 +24,9 @@ from patchpilot.domain.scorecard import (
     ScorecardMetrics,
 )
 from patchpilot.persistence.repositories import RunRepository
-from patchpilot.profiles.python import PythonProfile
+from patchpilot.profiles import profile_for
 from patchpilot.reporting.render import render_html, render_markdown
-from patchpilot.sandbox.local import run_argv
+from patchpilot.sandbox.base import SandboxError
 from patchpilot.sandbox.workspace import PathPolicyError
 from patchpilot.tools.base import ToolContext
 from patchpilot.tools.git import DiffSnapshot, collect_diff
@@ -347,86 +347,91 @@ class QualityGate:
             )
 
     def _run_acceptance(self, remaining_wall_time_seconds: float) -> _TestSuite:
-        profile = PythonProfile(self.context.task_spec)
+        profile = profile_for(self.context.task_spec)
         runs: list[_TestRun] = []
         gate_started = time.monotonic()
-        with tempfile.TemporaryDirectory(prefix="patchpilot-gate-") as temporary:
-            temporary_root = Path(temporary)
-            for index, command_id in enumerate(profile.command_ids):
-                remaining = remaining_wall_time_seconds - (time.monotonic() - gate_started)
-                if remaining <= 0:
-                    runs.append(
-                        _TestRun(
-                            command_id=command_id,
-                            exit_code=None,
-                            timed_out=False,
-                            budget_limited=True,
-                            truncated=False,
-                            duration_ms=0,
-                            stdout="",
-                            stderr="",
-                            executed_tests=(),
-                            failed_tests=(),
-                            skipped_tests=(),
-                            system_error="Quality Gate wall-time budget exhausted",
-                        )
+        for index, command_id in enumerate(profile.command_ids):
+            remaining = remaining_wall_time_seconds - (time.monotonic() - gate_started)
+            if remaining <= 0:
+                runs.append(
+                    _TestRun(
+                        command_id=command_id,
+                        exit_code=None,
+                        timed_out=False,
+                        budget_limited=True,
+                        truncated=False,
+                        duration_ms=0,
+                        stdout="",
+                        stderr="",
+                        executed_tests=(),
+                        failed_tests=(),
+                        skipped_tests=(),
+                        system_error="Quality Gate wall-time budget exhausted",
                     )
-                    break
-                resolved = profile.resolve(command_id)
-                report_path = temporary_root / f"junit-{index}.xml"
-                timeout = min(float(resolved.timeout_seconds), remaining)
-                budget_limited = timeout < resolved.timeout_seconds
-                argv = [
-                    *resolved.argv,
-                    f"--junitxml={report_path}",
-                    "-o",
-                    "junit_family=xunit2",
-                ]
-                try:
-                    command_result = run_argv(
-                        argv,
-                        cwd=self.context.workspace.path,
-                        timeout_seconds=max(0.001, timeout),
-                        output_max_chars=self.context.limits.output_max_chars,
-                        environment={"PYTEST_ADDOPTS": "--color=no"},
-                        cancel_event=self.context.cancellation_token.event,
+                )
+                break
+            resolved = profile.resolve(command_id)
+            report_path: Path | None = None
+            argv = list(resolved.argv)
+            if self.context.task_spec.repository.language == "python":
+                report_name = f".patchpilot-junit-{index}-{uuid4().hex}.xml"
+                report_path = self.context.workspace.path / report_name
+                argv.extend([f"--junitxml={report_name}", "-o", "junit_family=xunit2"])
+            timeout = min(float(resolved.timeout_seconds), remaining)
+            budget_limited = timeout < resolved.timeout_seconds
+            try:
+                command_result = self.context.command_sandbox.run(
+                    argv,
+                    cwd=self.context.workspace.path,
+                    timeout_seconds=max(0.001, timeout),
+                    output_max_chars=self.context.limits.output_max_chars,
+                    environment=profile.environment,
+                    cancel_event=self.context.cancellation_token.event,
+                )
+                if report_path is None:
+                    executed, failed, skipped = self._parse_go_test_output(
+                        f"{command_result.stdout}\n{command_result.stderr}"
                     )
+                else:
                     executed, failed, skipped = self._parse_junit(report_path)
-                    runs.append(
-                        _TestRun(
-                            command_id=command_id,
-                            exit_code=command_result.return_code,
-                            timed_out=command_result.timed_out,
-                            budget_limited=budget_limited and command_result.timed_out,
-                            truncated=command_result.truncated,
-                            duration_ms=command_result.duration_ms,
-                            stdout=command_result.stdout,
-                            stderr=command_result.stderr,
-                            executed_tests=executed,
-                            failed_tests=failed,
-                            skipped_tests=skipped,
-                        )
+                runs.append(
+                    _TestRun(
+                        command_id=command_id,
+                        exit_code=command_result.return_code,
+                        timed_out=command_result.timed_out,
+                        budget_limited=budget_limited and command_result.timed_out,
+                        truncated=command_result.truncated,
+                        duration_ms=command_result.duration_ms,
+                        stdout=command_result.stdout,
+                        stderr=command_result.stderr,
+                        executed_tests=executed,
+                        failed_tests=failed,
+                        skipped_tests=skipped,
                     )
-                    if command_result.cancelled:
-                        break
-                except OSError as exc:
-                    runs.append(
-                        _TestRun(
-                            command_id=command_id,
-                            exit_code=None,
-                            timed_out=False,
-                            budget_limited=False,
-                            truncated=False,
-                            duration_ms=0,
-                            stdout="",
-                            stderr="",
-                            executed_tests=(),
-                            failed_tests=(),
-                            skipped_tests=(),
-                            system_error=f"test command failed to start: {type(exc).__name__}",
-                        )
-                    )
+                )
+                if command_result.cancelled:
                     break
+            except (OSError, SandboxError) as exc:
+                runs.append(
+                    _TestRun(
+                        command_id=command_id,
+                        exit_code=None,
+                        timed_out=False,
+                        budget_limited=False,
+                        truncated=False,
+                        duration_ms=0,
+                        stdout="",
+                        stderr="",
+                        executed_tests=(),
+                        failed_tests=(),
+                        skipped_tests=(),
+                        system_error=f"sandbox command failed: {type(exc).__name__}",
+                    )
+                )
+                break
+            finally:
+                if report_path is not None and report_path.exists():
+                    report_path.unlink()
         return self._summarize_tests(runs)
 
     def _summarize_tests(self, runs: list[_TestRun]) -> _TestSuite:
@@ -485,6 +490,31 @@ class QualityGate:
             if testcase.find("failure") is not None or testcase.find("error") is not None:
                 failed.update(names)
             if testcase.find("skipped") is not None:
+                skipped.update(names)
+        return tuple(sorted(executed)), tuple(sorted(failed)), tuple(sorted(skipped))
+
+    @staticmethod
+    def _parse_go_test_output(
+        output: str,
+    ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+        executed: set[str] = set()
+        failed: set[str] = set()
+        skipped: set[str] = set()
+        for line in output.splitlines():
+            run_match = re.match(r"^=== RUN\s+([^\s]+)$", line.strip())
+            if run_match is not None:
+                name = run_match.group(1)
+                executed.update({name, name.split("/", 1)[0]})
+                continue
+            result_match = re.match(r"^--- (PASS|FAIL|SKIP):\s+([^\s]+)", line.strip())
+            if result_match is None:
+                continue
+            outcome, name = result_match.groups()
+            names = {name, name.split("/", 1)[0]}
+            executed.update(names)
+            if outcome == "FAIL":
+                failed.update(names)
+            elif outcome == "SKIP":
                 skipped.update(names)
         return tuple(sorted(executed)), tuple(sorted(failed)), tuple(sorted(skipped))
 

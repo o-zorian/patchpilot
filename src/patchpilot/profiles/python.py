@@ -36,7 +36,13 @@ class PythonProfile:
     """Resolve TaskSpec references without accepting arbitrary command text."""
 
     def __init__(self, spec: TaskSpec) -> None:
+        if spec.repository.language != "python":
+            raise ValueError("PythonProfile requires a Python TaskSpec")
         self._spec = spec
+
+    @property
+    def environment(self) -> dict[str, str]:
+        return {"PYTEST_ADDOPTS": "--color=no"}
 
     @property
     def command_ids(self) -> tuple[str, ...]:

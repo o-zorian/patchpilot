@@ -4,8 +4,9 @@ import time
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from patchpilot.profiles.python import CommandNotAllowedError, PythonProfile
-from patchpilot.sandbox.local import run_argv
+from patchpilot.profiles import profile_for
+from patchpilot.profiles.python import CommandNotAllowedError
+from patchpilot.sandbox.base import SandboxError
 from patchpilot.sandbox.workspace import PathPolicyError
 from patchpilot.tools.base import ToolContext, ToolResult, failure, path_failure, success
 
@@ -22,7 +23,7 @@ class RunTestsTool:
 
     def __init__(self, context: ToolContext) -> None:
         self.context = context
-        self.profile = PythonProfile(context.task_spec)
+        self.profile = profile_for(context.task_spec)
 
     def execute(
         self,
@@ -33,7 +34,10 @@ class RunTestsTool:
         started = time.monotonic()
         try:
             command = self.profile.resolve(arguments.profile_command_id, arguments.selector)
-            if arguments.selector is not None:
+            if (
+                arguments.selector is not None
+                and self.context.task_spec.repository.language == "python"
+            ):
                 selector_path = arguments.selector.split("::", 1)[0]
                 if selector_path.endswith(".py") or "/" in selector_path or "\\" in selector_path:
                     self.context.path_policy.resolve(selector_path, must_exist=True)
@@ -50,13 +54,20 @@ class RunTestsTool:
             else min(command.timeout_seconds, max(0.001, timeout_seconds_override))
         )
         try:
-            result = run_argv(
+            result = self.context.command_sandbox.run(
                 command.argv,
                 cwd=self.context.workspace.path,
                 timeout_seconds=effective_timeout,
                 output_max_chars=self.context.limits.output_max_chars,
-                environment={"PYTEST_ADDOPTS": "--color=no"},
+                environment=self.profile.environment,
                 cancel_event=self.context.cancellation_token.event,
+            )
+        except SandboxError as exc:
+            return failure(
+                self.name,
+                "SANDBOX_ERROR",
+                str(exc),
+                started=started,
             )
         except OSError as exc:
             return failure(
@@ -73,7 +84,8 @@ class RunTestsTool:
             "stdout": result.stdout,
             "stderr": result.stderr,
             "timed_out": result.timed_out,
-            "isolation": "trusted-local",
+            "isolation": self.context.command_sandbox.isolation,
+            "sandbox_image": self.context.command_sandbox.image,
             "cancelled": result.cancelled,
         }
         if result.cancelled:

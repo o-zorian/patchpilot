@@ -93,6 +93,8 @@ def service_settings(tmp_path: Path) -> AppSettings:
         database_url=f"sqlite+aiosqlite:///{(tmp_path / 'service.db').as_posix()}",
         artifact_root=tmp_path / "artifacts",
         workspace_root=tmp_path / "workspaces",
+        sandbox_mode="local",
+        allow_trusted_local_execution=True,
         worker_poll_seconds=0.01,
         worker_heartbeat_seconds=0.02,
         worker_cancel_poll_seconds=0.01,
@@ -149,6 +151,8 @@ async def test_api_worker_idempotency_events_artifacts_and_workspace_isolation(
                 client.assert_exhausted()
                 completed = await api.get(f"/api/v1/runs/{run_id}")
                 assert completed.json()["status"] == RunStatus.PASSED.value
+                assert completed.json()["sandbox_mode"] == "trusted-local"
+                assert completed.json()["sandbox_image"] is None
 
                 events = await api.get(f"/api/v1/runs/{run_id}/events")
                 sequences = [event["sequence"] for event in events.json()]

@@ -4,7 +4,7 @@ import json
 
 from patchpilot.domain.task import TaskSpec
 from patchpilot.models.base import Message, MessageRole
-from patchpilot.profiles.python import PythonProfile
+from patchpilot.profiles import profile_for
 from patchpilot.tools.base import ToolContext
 from patchpilot.tools.files import ListFilesInput, ListFilesTool
 
@@ -35,7 +35,7 @@ def build_initial_messages(context: ToolContext) -> list[Message]:
         "allowed_paths": spec.allowed_paths,
         "denied_paths": spec.denied_paths,
         "required_tests": spec.acceptance.required_tests,
-        "test_command_ids": list(PythonProfile(spec).command_ids),
+        "test_command_ids": list(profile_for(spec).command_ids),
         "budget": spec.budget.model_dump(mode="json"),
         "workspace_baseline_commit": context.workspace.baseline_commit,
         "repository_files": repository_files,

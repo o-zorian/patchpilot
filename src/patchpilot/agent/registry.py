@@ -17,6 +17,7 @@ from patchpilot.tools.files import (
     ReadFileTool,
 )
 from patchpilot.tools.git import GitDiffInput, GitDiffTool
+from patchpilot.tools.lint import RunLinterInput, RunLinterTool
 from patchpilot.tools.patch import ApplyPatchInput, ApplyPatchTool
 from patchpilot.tools.search import SearchCodeInput, SearchCodeTool
 from patchpilot.tools.tests import RunTestsInput, RunTestsTool
@@ -187,13 +188,24 @@ def build_default_registry(context: ToolContext) -> ToolRegistry:
     )
     registry.register(
         "run_tests",
-        "Run an application-defined Python pytest profile command.",
+        "Run an application-defined language profile test command.",
         RunTestsInput,
         lambda arguments, timeout: run_tests.execute(
             arguments,
             timeout_seconds_override=timeout,
         ),
     )
+    if context.task_spec.repository.language == "go":
+        run_linter = RunLinterTool(context)
+        registry.register(
+            "run_linter",
+            "Run fixed Go vet or format only modified Go files inside the sandbox.",
+            RunLinterInput,
+            lambda arguments, timeout: run_linter.execute(
+                arguments,
+                timeout_seconds_override=timeout,
+            ),
+        )
     registry.register(
         "finish",
         "Request deterministic Quality Gate evaluation; this does not mark the Run passed.",

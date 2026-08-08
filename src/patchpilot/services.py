@@ -33,6 +33,7 @@ from patchpilot.persistence.repositories import (
 )
 from patchpilot.quality.gate import QualityGate
 from patchpilot.queue import RunQueue
+from patchpilot.sandbox.factory import command_sandbox_for
 from patchpilot.sandbox.workspace import Workspace, WorkspaceManager
 from patchpilot.tools.base import ToolContext, ToolLimits
 
@@ -233,9 +234,19 @@ class RunExecutor:
                 workspace_id=str(run.id),
                 base_ref=task.spec.repository.base_ref,
             )
+            command_sandbox = command_sandbox_for(
+                self.settings,
+                workspace,
+                task.spec,
+                run.id,
+            )
             async with self.database.session() as session:
                 run = await RunRepository(session).mark_running(
-                    run.id, worker_id=worker_id, workspace_id=workspace.id
+                    run.id,
+                    worker_id=worker_id,
+                    workspace_id=workspace.id,
+                    sandbox_mode=command_sandbox.isolation,
+                    sandbox_image=command_sandbox.image,
                 )
             context = ToolContext.create(
                 workspace,
@@ -248,6 +259,7 @@ class RunExecutor:
                     max_file_bytes=self.settings.tool_max_file_bytes,
                 ),
                 cancellation_token=token,
+                command_sandbox=command_sandbox,
             )
             artifacts = ArtifactStore(
                 self.settings.artifact_root,

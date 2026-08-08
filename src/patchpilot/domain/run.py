@@ -92,6 +92,8 @@ class Run(BaseModel):
     claimed_at: datetime | None = None
     heartbeat_at: datetime | None = None
     worker_id: str | None = Field(default=None, max_length=255)
+    sandbox_mode: str | None = Field(default=None, max_length=32)
+    sandbox_image: str | None = Field(default=None, max_length=255)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def transition(

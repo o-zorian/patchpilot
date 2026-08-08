@@ -39,6 +39,7 @@ from patchpilot.persistence.database import Database
 from patchpilot.persistence.migrations import upgrade_database
 from patchpilot.persistence.models import EventRow, ModelCallRow, ToolCallRow
 from patchpilot.persistence.repositories import RunRepository
+from patchpilot.sandbox.trusted_local import TrustedLocalSandbox
 from patchpilot.sandbox.workspace import WorkspaceManager
 from patchpilot.tools.base import ToolContext, ToolLimits
 from tests.helpers import create_git_repository
@@ -80,6 +81,7 @@ def make_context(
             workspace,
             spec,
             ToolLimits(output_max_chars=20_000, max_file_bytes=1_000_000),
+            command_sandbox=TrustedLocalSandbox(),
         ),
         source,
     )

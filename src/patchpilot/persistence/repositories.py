@@ -186,7 +186,15 @@ class RunRepository:
         await self.session.commit()
         return None if row is None else self._from_row(row)
 
-    async def mark_running(self, run_id: UUID, *, worker_id: str, workspace_id: str) -> Run:
+    async def mark_running(
+        self,
+        run_id: UUID,
+        *,
+        worker_id: str,
+        workspace_id: str,
+        sandbox_mode: str,
+        sandbox_image: str | None,
+    ) -> Run:
         now = datetime.now(UTC)
         result = await self.session.execute(
             update(RunRow)
@@ -198,6 +206,8 @@ class RunRepository:
             .values(
                 status=RunStatus.RUNNING.value,
                 workspace_id=workspace_id,
+                sandbox_mode=sandbox_mode,
+                sandbox_image=sandbox_image,
                 heartbeat_at=now,
             )
             .returning(RunRow)
@@ -331,6 +341,8 @@ class RunRepository:
             claimed_at=run.claimed_at,
             heartbeat_at=run.heartbeat_at,
             worker_id=run.worker_id,
+            sandbox_mode=run.sandbox_mode,
+            sandbox_image=run.sandbox_image,
             created_at=run.created_at,
         )
 
@@ -357,6 +369,8 @@ class RunRepository:
             "claimed_at": row.claimed_at,
             "heartbeat_at": row.heartbeat_at,
             "worker_id": row.worker_id,
+            "sandbox_mode": row.sandbox_mode,
+            "sandbox_image": row.sandbox_image,
             "created_at": row.created_at,
         }
         for name in (

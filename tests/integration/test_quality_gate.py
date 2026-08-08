@@ -38,6 +38,7 @@ from patchpilot.persistence.migrations import upgrade_database
 from patchpilot.persistence.models import ArtifactRow
 from patchpilot.persistence.repositories import RunRepository
 from patchpilot.quality.gate import QualityGate
+from patchpilot.sandbox.trusted_local import TrustedLocalSandbox
 from patchpilot.sandbox.workspace import WorkspaceManager
 from patchpilot.tools.base import ToolContext, ToolLimits
 from tests.helpers import create_git_repository
@@ -83,6 +84,7 @@ def make_context(
             workspace,
             spec,
             ToolLimits(output_max_chars=30_000, max_file_bytes=1_000_000),
+            command_sandbox=TrustedLocalSandbox(),
         ),
         source,
     )
@@ -440,7 +442,12 @@ async def test_agent_budget_terminal_still_generates_scorecard_and_reports(
     limited_spec = context.task_spec.model_copy(
         update={"budget": context.task_spec.budget.model_copy(update={"max_steps": 1})}
     )
-    context = ToolContext.create(context.workspace, limited_spec, context.limits)
+    context = ToolContext.create(
+        context.workspace,
+        limited_spec,
+        context.limits,
+        command_sandbox=context.command_sandbox,
+    )
     client = ScriptedModelClient([response(content="no tool call")])
     run_id = uuid4()
     loop, _, artifacts = build_quality_loop(
