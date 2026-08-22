@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
 from patchpilot.benchmark.models import BenchmarkError
-from patchpilot.benchmark.real_models import RealSuiteKind, load_real_benchmark
+from patchpilot.benchmark.real_models import (
+    OutcomeClass,
+    RealBenchmarkRunRecord,
+    RealSuiteKind,
+    load_real_benchmark,
+)
+from patchpilot.benchmark.real_reporting import build_real_summary
 from patchpilot.benchmark.real_runner import (
     AuditedRealModelClient,
     GlobalCostLedger,
@@ -15,6 +22,7 @@ from patchpilot.benchmark.real_runner import (
     require_real_model,
 )
 from patchpilot.config import AppSettings, SettingsError
+from patchpilot.domain.run import RunStrategy
 from patchpilot.models.base import (
     Message,
     MessageRole,
@@ -51,6 +59,66 @@ def test_calibration_suite_is_separate_and_not_frozen() -> None:
     assert suite.manifest.suite_kind == RealSuiteKind.CALIBRATION
     assert suite.manifest.frozen is False
     assert len(suite.tasks) == 5
+
+
+def test_real_summary_includes_inference_agent_and_paired_metrics() -> None:
+    suite = load_real_benchmark(ROOT / "benchmarks" / "real-calibration-v1")
+    timestamp = datetime.now(UTC)
+
+    def record(strategy: RunStrategy, *, passed: bool) -> RealBenchmarkRunRecord:
+        return RealBenchmarkRunRecord(
+            run_key=("1" if strategy == RunStrategy.FULL else "2") * 64,
+            run_id=f"run-{strategy.value}",
+            task_id="cal-py-01",
+            strategy=strategy,
+            repetition=1,
+            language="python",
+            difficulty="easy",
+            defect="boundary",
+            outcome_class=OutcomeClass.TASK_RESULT,
+            result="PASSED" if passed else "FAILED_TESTS",
+            passed=passed,
+            first_gate_passed=passed,
+            provider="test-provider",
+            requested_model="test-model",
+            actual_model_ids=["test-model"],
+            prompt_version="real-v1",
+            temperature=0,
+            started_at=timestamp,
+            completed_at=timestamp,
+            steps=2,
+            model_calls=1,
+            model_attempts=1,
+            model_retries=0,
+            tool_calls=1,
+            prompt_tokens=100,
+            completion_tokens=20,
+            usage_estimated=False,
+            estimated_cost_usd=Decimal("0.01"),
+            reserved_unknown_cost_usd=Decimal(0),
+            model_latency_ms=100,
+            wall_time_seconds=1,
+            scope_violation=False,
+            regression=False,
+            baseline_commit="0" * 40,
+            artifact_directory="runs/example",
+        )
+
+    summary = build_real_summary(
+        suite,
+        [record(RunStrategy.FULL, passed=True), record(RunStrategy.SINGLE_SHOT, passed=False)],
+        experiment={"task_limit": 1, "strategies": ["full", "single_shot"], "repetitions": 1},
+        global_cost_limit=Decimal("4"),
+        reserved_unknown_cost=Decimal(0),
+    )
+
+    assert summary.by_strategy["full"]["pass_at_1"] == 1.0
+    assert summary.by_strategy["full"]["pass_rate_95ci"] == [0.206549, 1.0]
+    assert summary.latency["p95_run_wall_seconds"] == 1
+    assert summary.agent_metrics["average_tool_calls"] == 1
+    paired = summary.paired_comparisons["full_vs_single_shot"]
+    assert paired["left_wins"] == 1
+    assert paired["right_wins"] == 0
 
 
 def test_real_model_requires_all_three_explicit_gates() -> None:

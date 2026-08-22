@@ -190,6 +190,8 @@ class RealBenchmarkSummary(BaseModel):
     counts: dict[str, int]
     cost: dict[str, str]
     latency: dict[str, float]
+    agent_metrics: dict[str, object]
+    paired_comparisons: dict[str, dict[str, object]]
     by_strategy: dict[str, dict[str, object]]
     by_language: dict[str, dict[str, object]]
     by_difficulty: dict[str, dict[str, object]]
