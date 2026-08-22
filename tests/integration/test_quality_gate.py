@@ -20,6 +20,7 @@ from patchpilot.agent.events import (
 )
 from patchpilot.agent.loop import AgentLoop, AgentLoopStatus
 from patchpilot.agent.registry import build_default_registry
+from patchpilot.agent.strategies import StrategyPolicy, policy_for
 from patchpilot.artifacts import ArtifactKind, ArtifactStore
 from patchpilot.domain.run import RunStatus, RunStrategy
 from patchpilot.domain.scorecard import QualityResult
@@ -135,6 +136,7 @@ def build_quality_loop(
     database: Database | None = None,
     configure_context: Callable[[ToolContext], object] | None = None,
     hidden_test: HiddenTestInjection | None = None,
+    strategy_policy: StrategyPolicy | None = None,
 ) -> tuple[AgentLoop, InMemoryEventSink, ArtifactStore]:
     if configure_context is not None:
         configure_context(context)
@@ -161,8 +163,37 @@ def build_quality_loop(
         registry=build_default_registry(context),
         events=events,
         quality_gate=gate,
+        strategy_policy=strategy_policy,
     )
     return loop, memory, artifacts
+
+
+@pytest.mark.asyncio
+async def test_single_shot_scores_patch_at_model_call_limit(
+    tmp_path: Path,
+    valid_task_data: dict[str, Any],
+) -> None:
+    context, _ = make_context(tmp_path, valid_task_data)
+    client = ScriptedModelClient(
+        [response(patch_call("single-patch", "left - right", "left + right"))]
+    )
+    run_id = uuid4()
+    loop, memory, _ = build_quality_loop(
+        context,
+        client,
+        run_id,
+        tmp_path / "artifacts",
+        strategy_policy=policy_for(RunStrategy.SINGLE_SHOT),
+    )
+
+    result = await loop.run(run_id)
+    client.assert_exhausted()
+
+    assert result.status == AgentLoopStatus.PASSED
+    assert result.result_code == QualityResult.PASSED.value
+    assert result.metrics.model_calls == 1
+    assert EventType.QUALITY_GATE_PASSED in {event.type for event in memory.events}
+    assert memory.events[-1].payload["strategy_model_limit_reached"] is True
 
 
 @pytest.mark.asyncio

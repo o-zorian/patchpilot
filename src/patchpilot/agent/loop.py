@@ -192,6 +192,9 @@ class AgentLoop:
                 and self.strategy_policy.max_model_calls is not None
                 and self.budget.model_calls >= self.strategy_policy.max_model_calls
             ):
+                if self.quality_gate is not None:
+                    gate_attempts += 1
+                    return await self._strategy_limit_gate_result(run_id, gate_attempts)
                 return await self._failure_result(
                     run_id,
                     result_code="MODEL_ERROR",
@@ -449,6 +452,69 @@ class AgentLoop:
                     return await self._budget_result(run_id, wall_stop)
             if gate_feedback_received:
                 continue
+
+    async def _strategy_limit_gate_result(
+        self,
+        run_id: UUID,
+        gate_attempt: int,
+    ) -> AgentLoopResult:
+        """Score the Workspace when a bounded strategy has used its final model call."""
+        if self.quality_gate is None:
+            raise RuntimeError("strategy limit Gate requires a QualityGate")
+        metrics = AgentMetrics.from_snapshot(self.budget.snapshot())
+        outcome = await self.quality_gate.evaluate(
+            metrics.to_scorecard_metrics(),
+            attempt=gate_attempt,
+            remaining_wall_time_seconds=self.budget.remaining_wall_time_seconds,
+        )
+        gate_metrics = AgentMetrics.from_scorecard_metrics(outcome.scorecard.metrics)
+        post_gate_budget = self.budget.check_non_step_limits()
+        if post_gate_budget is not None:
+            return await self._budget_result(run_id, post_gate_budget)
+
+        if outcome.passed:
+            status = AgentLoopStatus.PASSED
+            run_status = RunStatus.PASSED
+            event_type = EventType.RUN_COMPLETED
+        elif outcome.result == QualityResult.CANCELLED:
+            status = AgentLoopStatus.CANCELLED
+            run_status = RunStatus.CANCELLED
+            event_type = EventType.RUN_CANCELLED
+        elif outcome.result == QualityResult.TIMEOUT:
+            status = AgentLoopStatus.TIMEOUT
+            run_status = RunStatus.TIMEOUT
+            event_type = EventType.RUN_FAILED
+        elif outcome.result == QualityResult.BUDGET_EXCEEDED:
+            status = AgentLoopStatus.BUDGET_EXCEEDED
+            run_status = RunStatus.BUDGET_EXCEEDED
+            event_type = EventType.RUN_FAILED
+        else:
+            status = AgentLoopStatus.FAILED
+            run_status = RunStatus.FAILED
+            event_type = EventType.RUN_FAILED
+
+        await self.events.emit(
+            event_type,
+            {
+                "status": status.value,
+                "result_code": outcome.result.value,
+                "error_code": None,
+                "steps": metrics.steps,
+                "tool_calls": metrics.tool_calls,
+                "gate_attempts": gate_attempt,
+                "strategy_model_limit_reached": True,
+            },
+        )
+        await self.quality_gate.finalize_run(run_status, outcome.scorecard)
+        await self.quality_gate.finalize_event_log()
+        return AgentLoopResult(
+            run_id=run_id,
+            status=status,
+            result_code=outcome.result.value,
+            scorecard=outcome.scorecard,
+            metrics=gate_metrics,
+            prompt_version=self.prompt_version,
+        )
 
     async def _request_model(self, messages: list[Message]) -> tuple[ModelResponse, int]:
         max_attempts = self.model_config.max_retries + 1
