@@ -1,0 +1,14 @@
+version: "1"
+id: real-v1-full-high-budget-v1
+classification: budget_ablation
+base_benchmark_id: real-v1
+strategy: full
+repetitions: 3
+concurrency: 1
+global_cost_limit_usd: 10.00
+budget:
+  max_input_tokens: 500000
+  max_output_tokens: 100000
+  max_steps: 64
+  max_wall_time_seconds: 1800
+  max_cost_usd: 1.00

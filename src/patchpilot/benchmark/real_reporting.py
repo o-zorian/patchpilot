@@ -69,6 +69,8 @@ def _group_metrics(records: list[RealBenchmarkRunRecord]) -> dict[str, object]:
         "interrupted": sum(record.outcome_class == OutcomeClass.INTERRUPTED for record in records),
         "prompt_tokens": sum(record.prompt_tokens for record in records),
         "completion_tokens": sum(record.completion_tokens for record in records),
+        "model_calls": sum(record.model_calls for record in records),
+        "tool_calls": sum(record.tool_calls for record in records),
         "cost_usd": str(sum((record.estimated_cost_usd for record in records), Decimal(0))),
         "average_wall_time_seconds": (
             round(sum(record.wall_time_seconds for record in records) / len(records), 6)
@@ -153,6 +155,7 @@ def build_real_summary(
     experiment: dict[str, object],
     global_cost_limit: Decimal,
     reserved_unknown_cost: Decimal,
+    event_metrics: dict[str, object] | None = None,
 ) -> RealBenchmarkSummary:
     task_results = [
         record for record in records if record.outcome_class == OutcomeClass.TASK_RESULT
@@ -177,8 +180,14 @@ def build_real_summary(
     expected_runs = selected_task_count * strategy_count * repetition_count
     matrix_complete = expected_runs > 0 and len(records) == expected_runs
     error_free = all(record.outcome_class == OutcomeClass.TASK_RESULT for record in records)
+    exploratory = experiment.get("experiment_classification") == "budget_ablation"
+    benchmark_id = (
+        str(experiment["experiment_id"])
+        if isinstance(experiment.get("experiment_id"), str)
+        else suite.manifest.id
+    )
     return RealBenchmarkSummary(
-        benchmark_id=suite.manifest.id,
+        benchmark_id=benchmark_id,
         suite_kind=suite.manifest.suite_kind,
         generated_at=datetime.now(UTC),
         manifest_sha256=suite.manifest_sha256,
@@ -199,14 +208,21 @@ def build_real_summary(
             "expected_runs": expected_runs,
             "matrix_complete": int(matrix_complete),
             "formal_result_valid": int(
-                suite.manifest.suite_kind.value == "formal" and matrix_complete and error_free
+                suite.manifest.suite_kind.value == "formal"
+                and not exploratory
+                and matrix_complete
+                and error_free
             ),
+            "exploratory_result_valid": int(exploratory and matrix_complete and error_free),
         },
         cost={
             "actual_usage_cost_usd": str(actual_cost),
             "reserved_unknown_cost_usd": str(reserved_unknown_cost),
             "accounted_cost_usd": str(actual_cost + reserved_unknown_cost),
             "global_limit_usd": str(global_cost_limit),
+            "remaining_global_budget_usd": str(
+                global_cost_limit - actual_cost - reserved_unknown_cost
+            ),
         },
         latency={
             "total_model_latency_seconds": round(total_latency / 1_000, 6),
@@ -216,6 +232,12 @@ def build_real_summary(
                 else 0.0
             ),
             "p95_run_wall_seconds": _percentile_95(wall_times),
+            "average_model_latency_seconds": (
+                round(total_latency / len(records) / 1_000, 6) if records else 0.0
+            ),
+            "p95_model_latency_seconds": _percentile_95(
+                [record.model_latency_ms / 1_000 for record in records]
+            ),
         },
         agent_metrics={
             "average_steps": (
@@ -236,7 +258,13 @@ def build_real_summary(
             "average_usage_cost_per_successful_run_usd": (
                 str(actual_cost / passed_count) if passed_count else None
             ),
+            "total_steps": sum(record.steps for record in records),
+            "total_model_calls": sum(record.model_calls for record in records),
+            "total_model_attempts": sum(record.model_attempts for record in records),
+            "total_model_retries": sum(record.model_retries for record in records),
+            "total_tool_calls": sum(record.tool_calls for record in records),
         },
+        event_metrics=event_metrics or {},
         paired_comparisons=_paired_comparisons(records),
         by_strategy=_groups(records, lambda record: record.strategy.value),
         by_language=_groups(records, lambda record: record.language),
@@ -251,6 +279,13 @@ def build_real_summary(
             "No formal result is valid unless all frozen task/strategy/repetition matrix entries are present.",
             "Pass rates use model task-result runs; repeat success rates use every persisted matrix entry and retain API/infrastructure outcomes in the denominator.",
             "95% confidence intervals are Wilson score intervals; paired comparisons only use matching task/repetition pairs and disclose excluded error pairs.",
+            *(
+                [
+                    "This is a full-strategy high-budget ablation with a different Run budget; it must not replace or be used in the equal-budget four-strategy formal ranking."
+                ]
+                if exploratory
+                else []
+            ),
         ],
     )
 
@@ -262,6 +297,7 @@ def _rate(value: object) -> str:
 
 
 def render_real_markdown(summary: RealBenchmarkSummary) -> str:
+    exploratory = summary.experiment.get("experiment_classification") == "budget_ablation"
     strategy_rows = (
         "\n".join(
             f"| {name} | {metrics['runs']} | {_rate(metrics['pass_at_1'])} | {_rate(metrics['repeat_success_rate'])} | {_rate(metrics['pass_rate'])} | {metrics['api_errors']} | {metrics['infrastructure_errors']} | ${metrics['cost_usd']} |"
@@ -287,11 +323,17 @@ def render_real_markdown(summary: RealBenchmarkSummary) -> str:
         + (
             "These results are not part of the formal Benchmark.\n\n"
             if summary.suite_kind.value == "calibration"
-            else "Formal conclusions require a complete frozen matrix.\n\n"
+            else (
+                "This is an exploratory full strategy high-budget ablation. It has a different Run budget and cannot replace or rank the equal-budget four-strategy formal result.\n\n"
+                if exploratory
+                else "Formal conclusions require a complete frozen matrix.\n\n"
+            )
         )
         + "## Reproducibility identity\n\n"
         f"- Manifest SHA-256: `{summary.manifest_sha256}`\n"
         f"- Task-set SHA-256: `{summary.task_set_sha256}`\n"
+        f"- Experiment profile SHA-256: `{summary.experiment.get('experiment_profile_sha256')}`\n"
+        f"- Experiment fingerprint: `{summary.experiment.get('experiment_fingerprint')}`\n"
         f"- Provider label: `{summary.experiment.get('provider')}`\n"
         f"- Requested model: `{summary.experiment.get('requested_model')}`\n"
         f"- Prompt version: `{summary.experiment.get('prompt_version')}`\n"
@@ -307,19 +349,30 @@ def render_real_markdown(summary: RealBenchmarkSummary) -> str:
         f"- Matrix complete: {bool(summary.counts['matrix_complete'])} "
         f"({summary.counts['persisted_runs']} / {summary.counts['expected_runs']})\n"
         f"- Formal result valid: {bool(summary.counts['formal_result_valid'])}\n\n"
+        f"- Exploratory result valid: {bool(summary.counts['exploratory_result_valid'])}\n\n"
         "## Cost accounting\n\n"
         f"- Usage-derived cost: ${summary.cost['actual_usage_cost_usd']}\n"
         f"- Conservatively reserved unknown cost: ${summary.cost['reserved_unknown_cost_usd']}\n"
         f"- Accounted cost / hard limit: ${summary.cost['accounted_cost_usd']} / ${summary.cost['global_limit_usd']}\n\n"
+        f"- Remaining global budget: ${summary.cost['remaining_global_budget_usd']}\n\n"
         "## Strategy comparison\n\n"
         "| Strategy | Runs | pass@1 | Repeat success | Model task pass | API errors | Infra errors | Cost |\n"
         "|---|---:|---:|---:|---:|---:|---:|---:|\n"
         f"{strategy_rows}\n\n"
         "## Latency and agent activity\n\n"
         f"- Average / P95 wall time: {summary.latency['average_run_wall_seconds']}s / {summary.latency['p95_run_wall_seconds']}s\n"
+        f"- Average / P95 model latency: {summary.latency['average_model_latency_seconds']}s / {summary.latency['p95_model_latency_seconds']}s\n"
         f"- Average steps / tool calls: {summary.agent_metrics['average_steps']} / {summary.agent_metrics['average_tool_calls']}\n"
+        f"- Total model calls / attempts / retries: {summary.agent_metrics['total_model_calls']} / {summary.agent_metrics['total_model_attempts']} / {summary.agent_metrics['total_model_retries']}\n"
+        f"- Total tool calls: {summary.agent_metrics['total_tool_calls']}\n"
         f"- First Gate pass rate: {_rate(summary.agent_metrics['first_gate_pass_rate'])}\n"
         f"- Usage cost per successful Run: ${summary.agent_metrics['average_usage_cost_per_successful_run_usd']}\n\n"
+        "## Event behavior\n\n"
+        f"- Context compactions: {summary.event_metrics.get('context_compactions', 0)}\n"
+        f"- Runs / model requests after public tests passed: {summary.event_metrics.get('runs_continued_after_public_tests_passed', 0)} / {summary.event_metrics.get('model_requests_after_public_tests_passed', 0)}\n"
+        f"- apply_patch: `{summary.event_metrics.get('apply_patch', {})}`\n"
+        f"- run_tests: `{summary.event_metrics.get('run_tests', {})}`\n"
+        f"- Emergency limit hits: `{summary.event_metrics.get('limit_hits', {})}`\n\n"
         "## Paired comparisons\n\n"
         "| Left | Right | Eligible pairs | Left wins | Right wins | Both pass | Both fail | Error pairs excluded |\n"
         "|---|---|---:|---:|---:|---:|---:|---:|\n"
@@ -355,14 +408,19 @@ def render_real_html(summary: RealBenchmarkSummary) -> str:
         or '<tr><td colspan="8">No eligible pairs</td></tr>'
     )
     calibration = summary.suite_kind.value == "calibration"
+    exploratory = summary.experiment.get("experiment_classification") == "budget_ablation"
     formal_valid = bool(summary.counts["formal_result_valid"])
     banner = (
         "Calibration only — excluded from formal Benchmark conclusions"
         if calibration
         else (
-            "Formal frozen suite — complete and free of API/infrastructure errors"
-            if formal_valid
-            else "INCOMPLETE/INVALID formal result — do not quote a pass rate"
+            "Exploratory full strategy high-budget ablation — not an equal-budget strategy ranking"
+            if exploratory
+            else (
+                "Formal frozen suite — complete and free of API/infrastructure errors"
+                if formal_valid
+                else "INCOMPLETE/INVALID formal result — do not quote a pass rate"
+            )
         )
     )
     return f"""<!doctype html>
@@ -374,6 +432,7 @@ def render_real_html(summary: RealBenchmarkSummary) -> str:
 <section><h2>Outcome classes</h2><div class="metrics"><div class="metric"><strong>{summary.counts["persisted_runs"]}</strong><span>persisted runs</span></div><div class="metric"><strong>{summary.counts["task_results"]}</strong><span>task results</span></div><div class="metric"><strong>{summary.counts["passed"]}</strong><span>passed</span></div><div class="metric"><strong>{summary.counts["api_errors"]}</strong><span>API errors</span></div><div class="metric"><strong>{summary.counts["infrastructure_errors"]}</strong><span>infra errors</span></div></div></section>
 <section><h2>Cost accounting</h2><p>Usage ${html.escape(summary.cost["actual_usage_cost_usd"])} + unknown reserve ${html.escape(summary.cost["reserved_unknown_cost_usd"])} = <strong>${html.escape(summary.cost["accounted_cost_usd"])}</strong> / hard limit ${html.escape(summary.cost["global_limit_usd"])}</p></section>
 <section><h2>Strategy comparison</h2><div class="table"><table><thead><tr><th>Strategy</th><th>Runs</th><th>pass@1</th><th>Repeat success</th><th>Model task pass</th><th>API errors</th><th>Infra errors</th><th>Cost</th></tr></thead><tbody>{rows}</tbody></table></div></section>
-<section><h2>Latency and agent activity</h2><div class="metrics"><div class="metric"><strong>{summary.latency["average_run_wall_seconds"]}s</strong><span>average wall time</span></div><div class="metric"><strong>{summary.latency["p95_run_wall_seconds"]}s</strong><span>P95 wall time</span></div><div class="metric"><strong>{summary.agent_metrics["average_steps"]}</strong><span>average steps</span></div><div class="metric"><strong>{summary.agent_metrics["average_tool_calls"]}</strong><span>average tool calls</span></div><div class="metric"><strong>{_rate(summary.agent_metrics["first_gate_pass_rate"])}</strong><span>first Gate pass rate</span></div></div></section>
+<section><h2>Latency and agent activity</h2><div class="metrics"><div class="metric"><strong>{summary.latency["average_run_wall_seconds"]}s</strong><span>average wall time</span></div><div class="metric"><strong>{summary.latency["p95_run_wall_seconds"]}s</strong><span>P95 wall time</span></div><div class="metric"><strong>{summary.latency["p95_model_latency_seconds"]}s</strong><span>P95 model latency</span></div><div class="metric"><strong>{summary.agent_metrics["average_steps"]}</strong><span>average steps</span></div><div class="metric"><strong>{summary.agent_metrics["total_model_calls"]}</strong><span>model calls</span></div><div class="metric"><strong>{summary.agent_metrics["total_tool_calls"]}</strong><span>tool calls</span></div><div class="metric"><strong>{_rate(summary.agent_metrics["first_gate_pass_rate"])}</strong><span>first Gate pass rate</span></div></div></section>
+<section><h2>Event behavior</h2><p>Context compactions: <strong>{summary.event_metrics.get("context_compactions", 0)}</strong><br>Runs / model requests after public tests passed: <strong>{summary.event_metrics.get("runs_continued_after_public_tests_passed", 0)} / {summary.event_metrics.get("model_requests_after_public_tests_passed", 0)}</strong><br><code>apply_patch {html.escape(str(summary.event_metrics.get("apply_patch", {})))}</code><br><code>run_tests {html.escape(str(summary.event_metrics.get("run_tests", {})))}</code><br><code>limit hits {html.escape(str(summary.event_metrics.get("limit_hits", {})))}</code></p></section>
 <section><h2>Paired comparisons</h2><div class="table"><table><thead><tr><th>Left</th><th>Right</th><th>Eligible</th><th>Left wins</th><th>Right wins</th><th>Both pass</th><th>Both fail</th><th>Error pairs excluded</th></tr></thead><tbody>{paired_rows}</tbody></table></div></section>
 <section><h2>Failure reasons</h2><ul class="failures">{failures}</ul></section><section><h2>Limitations</h2><ul>{limitations}</ul></section></main></body></html>"""

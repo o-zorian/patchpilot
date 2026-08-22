@@ -13,9 +13,14 @@ from pydantic import ValidationError
 
 from patchpilot import __version__
 from patchpilot.benchmark.models import BenchmarkError, load_benchmark
-from patchpilot.benchmark.real_models import RealBenchmarkRunRecord, load_real_benchmark
+from patchpilot.benchmark.real_models import (
+    RealBenchmarkRunRecord,
+    load_real_benchmark,
+    load_real_experiment_profile,
+)
 from patchpilot.benchmark.real_runner import (
     RealBenchmarkStopped,
+    effective_experiment_task_spec,
     estimate_full_matrix,
     ping_real_model,
     run_real_benchmark,
@@ -576,6 +581,120 @@ def execute_real_benchmark(
             f"{result.summary.counts['persisted_runs']} persisted runs; "
             f"accounted cost ${result.summary.cost['accounted_cost_usd']}; "
             f"reports in {result.output_directory}"
+        ),
+    )
+
+
+@benchmark_app.command("real-experiment-validate")
+def validate_real_experiment(
+    path: Annotated[Path, typer.Argument(exists=True, file_okay=False, readable=True)],
+    profile_path: Annotated[
+        Path,
+        typer.Option("--profile", exists=True, dir_okay=False, readable=True),
+    ],
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        suite = load_real_benchmark(path)
+        loaded = load_real_experiment_profile(profile_path, suite)
+        profile = loaded.profile
+        if not suite.manifest.frozen:
+            raise BenchmarkError("real experiment requires a frozen base benchmark")
+        for task in suite.tasks:
+            effective = effective_experiment_task_spec(task.spec, loaded)
+            if (
+                effective.allowed_paths != task.spec.allowed_paths
+                or effective.denied_paths != task.spec.denied_paths
+                or effective.execution != task.spec.execution
+                or effective.acceptance != task.spec.acceptance
+                or effective.budget.max_changed_files != task.spec.budget.max_changed_files
+                or effective.budget.max_patch_lines != task.spec.budget.max_patch_lines
+            ):
+                raise BenchmarkError("experiment profile changed a frozen quality constraint")
+    except (BenchmarkError, OSError, ValueError) as exc:
+        _fail(str(exc), json_output=json_output)
+    payload = {
+        "ok": True,
+        "network_model_calls": False,
+        "experiment_id": profile.id,
+        "classification": profile.classification,
+        "base_benchmark_id": suite.manifest.id,
+        "manifest_sha256": suite.manifest_sha256,
+        "task_set_sha256": suite.task_set_sha256,
+        "experiment_profile_sha256": loaded.sha256,
+        "tasks": len(suite.tasks),
+        "strategies": [profile.strategy.value],
+        "repetitions": profile.repetitions,
+        "runs": len(suite.tasks) * profile.repetitions,
+        "concurrency": profile.concurrency,
+        "global_cost_limit_usd": str(profile.global_cost_limit_usd),
+        "budget": profile.budget.model_dump(mode="json"),
+        "quality_constraints_unchanged": True,
+    }
+    _emit(
+        payload,
+        json_output=json_output,
+        human=(
+            f"Experiment {profile.id} is valid: {payload['runs']} fixed full-strategy Runs; "
+            f"profile SHA-256 {loaded.sha256}; no model request was made"
+        ),
+    )
+
+
+@benchmark_app.command("real-experiment-run")
+def execute_real_experiment(
+    path: Annotated[Path, typer.Argument(exists=True, file_okay=False, readable=True)],
+    profile_path: Annotated[
+        Path,
+        typer.Option("--profile", exists=True, dir_okay=False, readable=True),
+    ],
+    output: Annotated[Path, typer.Option("--output", "-o", file_okay=False)],
+    max_total_cost_usd: Annotated[
+        float,
+        typer.Option("--max-total-cost-usd", min=0.000001),
+    ],
+    real_model: Annotated[
+        bool,
+        typer.Option(
+            "--real-model",
+            help="Explicitly authorize paid model calls for this experiment.",
+        ),
+    ] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    settings = _settings()
+    try:
+        result = asyncio.run(
+            run_real_benchmark(
+                path,
+                output,
+                settings=settings,
+                explicit_real_model=real_model,
+                provider=settings.model_provider,
+                global_cost_limit=Decimal(str(max_total_cost_usd)),
+                experiment_profile_path=profile_path,
+            )
+        )
+    except RealBenchmarkStopped as exc:
+        _fail(str(exc), json_output=json_output)
+    except (BenchmarkError, SettingsError, OSError, RuntimeError, ValueError) as exc:
+        _fail(str(exc), json_output=json_output)
+    payload = {
+        "ok": True,
+        "experiment_id": result.summary.benchmark_id,
+        "persisted_runs": result.summary.counts["persisted_runs"],
+        "expected_runs": result.summary.counts["expected_runs"],
+        "accounted_cost_usd": result.summary.cost["accounted_cost_usd"],
+        "resumed_runs": result.resumed_runs,
+        "output_directory": str(result.output_directory),
+    }
+    _emit(
+        payload,
+        json_output=json_output,
+        human=(
+            f"Real experiment {result.summary.benchmark_id}: "
+            f"{payload['persisted_runs']}/{payload['expected_runs']} persisted Runs; "
+            f"accounted cost ${payload['accounted_cost_usd']}"
         ),
     )
 

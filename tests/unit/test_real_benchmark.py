@@ -13,13 +13,17 @@ from patchpilot.benchmark.real_models import (
     RealBenchmarkRunRecord,
     RealSuiteKind,
     load_real_benchmark,
+    load_real_experiment_profile,
 )
 from patchpilot.benchmark.real_reporting import build_real_summary
 from patchpilot.benchmark.real_runner import (
     AuditedRealModelClient,
     GlobalCostLedger,
     GlobalCostLimitError,
+    effective_experiment_task_spec,
+    reproducibility_fingerprint,
     require_real_model,
+    validate_resume_experiment,
 )
 from patchpilot.config import AppSettings, SettingsError
 from patchpilot.domain.run import RunStrategy
@@ -51,6 +55,53 @@ def test_real_v1_is_a_frozen_balanced_auditable_suite() -> None:
     assert sum(task.source.changed_files_expected >= 2 for task in suite.tasks) >= 8
     assert all(task.source.provenance == "curated_snapshot" for task in suite.tasks)
     assert len(suite.task_set_sha256) == 64
+
+
+def test_high_budget_experiment_is_independent_and_preserves_frozen_quality() -> None:
+    suite = load_real_benchmark(ROOT / "benchmarks" / "real-v1")
+    loaded = load_real_experiment_profile(
+        ROOT / "benchmarks" / "real-v1" / "experiments" / "real-v1-full-high-budget-v1.yaml",
+        suite,
+    )
+
+    assert suite.manifest_sha256 == (
+        "29c84e2e2a4365fb5b616c1f358edbc35502b2001ecc48736401c03ed0de47ef"
+    )
+    assert suite.task_set_sha256 == (
+        "265794ed6179c52e6215e246587e41fa545b39aa0cb4f6d2371fdfc7bdc9c41b"
+    )
+    assert loaded.profile.id == "real-v1-full-high-budget-v1"
+    assert loaded.profile.strategy == RunStrategy.FULL
+    assert loaded.profile.repetitions == 3
+    assert loaded.profile.concurrency == 1
+    assert loaded.profile.global_cost_limit_usd == Decimal("10.00")
+    assert len(loaded.sha256) == 64
+
+    original = suite.tasks[0].spec
+    effective = effective_experiment_task_spec(original, loaded)
+    assert effective.budget.max_input_tokens == 500_000
+    assert effective.budget.max_output_tokens == 100_000
+    assert effective.budget.max_steps == 64
+    assert effective.budget.max_wall_time_seconds == 1_800
+    assert effective.budget.max_cost_usd == Decimal("1.00")
+    assert effective.budget.max_changed_files == original.budget.max_changed_files
+    assert effective.budget.max_patch_lines == original.budget.max_patch_lines
+    assert effective.allowed_paths == original.allowed_paths
+    assert effective.denied_paths == original.denied_paths
+    assert effective.execution == original.execution
+    assert effective.acceptance == original.acceptance
+
+
+def test_experiment_fingerprint_covers_budget_and_resume_rejects_mismatch() -> None:
+    low: dict[str, object] = {"commit": "a" * 40, "budget_profile": {"max_steps": 30}}
+    high: dict[str, object] = {"commit": "a" * 40, "budget_profile": {"max_steps": 64}}
+    low["experiment_fingerprint"] = reproducibility_fingerprint(low)
+    high["experiment_fingerprint"] = reproducibility_fingerprint(high)
+
+    assert low["experiment_fingerprint"] != high["experiment_fingerprint"]
+    assert validate_resume_experiment(high, dict(high)) == high
+    with pytest.raises(BenchmarkError, match="resume configuration"):
+        validate_resume_experiment(low, high)
 
 
 def test_calibration_suite_is_separate_and_not_frozen() -> None:
@@ -153,6 +204,18 @@ async def test_global_cost_ledger_enforces_reserved_and_unknown_costs() -> None:
     assert await ledger.mark_unknown(reservation) == Decimal("0.08")
     assert ledger.accounted == Decimal("0.08")
     assert not await ledger.can_start(Decimal("0.03"))
+
+
+@pytest.mark.asyncio
+async def test_high_budget_global_ledger_never_authorizes_more_than_ten_dollars() -> None:
+    ledger = GlobalCostLedger(Decimal("10.00"))
+    reservations = [await ledger.reserve(Decimal("1.00")) for _ in range(10)]
+    with pytest.raises(GlobalCostLimitError):
+        await ledger.reserve(Decimal("0.000001"))
+    for reservation in reservations:
+        await ledger.settle(reservation, Decimal("0.25"))
+    assert ledger.accounted == Decimal("2.50")
+    assert await ledger.can_start(Decimal("1.00"))
 
 
 @pytest.mark.asyncio

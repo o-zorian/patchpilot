@@ -39,6 +39,8 @@ jobs:
         run: |
           patchpilot benchmark real-validate benchmarks/real-calibration-v1 --json
           patchpilot benchmark real-validate benchmarks/real-v1 --json
+          patchpilot benchmark real-experiment-validate benchmarks/real-v1 \
+            --profile benchmarks/real-v1/experiments/real-v1-full-high-budget-v1.yaml --json
       - name: Run one offline Benchmark task
         run: >-
           patchpilot benchmark run benchmarks/local-v1

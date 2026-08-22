@@ -70,6 +70,42 @@ class RealBenchmarkManifest(BaseModel):
         return self
 
 
+class RealExperimentBudget(BaseModel):
+    """Run-safety limits overridden by an explicitly separate experiment profile."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    max_input_tokens: int = Field(gt=0)
+    max_output_tokens: int = Field(gt=0)
+    max_steps: int = Field(gt=0)
+    max_wall_time_seconds: int = Field(gt=0)
+    max_cost_usd: Decimal = Field(gt=0)
+
+
+class RealExperimentProfile(BaseModel):
+    """A frozen ablation matrix layered on top of, but not merged into, real-v1."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    version: Literal["1"]
+    id: str = Field(min_length=1, max_length=128)
+    classification: Literal["budget_ablation"]
+    base_benchmark_id: str = Field(min_length=1, max_length=128)
+    strategy: RunStrategy
+    repetitions: int = Field(gt=0, le=3)
+    concurrency: int = Field(gt=0, le=4)
+    global_cost_limit_usd: Decimal = Field(gt=0)
+    budget: RealExperimentBudget
+
+    @model_validator(mode="after")
+    def validate_profile(self) -> RealExperimentProfile:
+        if not _ID.fullmatch(self.id) or not _ID.fullmatch(self.base_benchmark_id):
+            raise ValueError("experiment or base benchmark id contains unsupported characters")
+        if self.strategy != RunStrategy.FULL:
+            raise ValueError("budget ablation profile must select only the full strategy")
+        return self
+
+
 class SourceRecord(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -135,6 +171,13 @@ class RealBenchmarkSuite:
     task_set_sha256: str
 
 
+@dataclass(frozen=True, slots=True)
+class LoadedRealExperimentProfile:
+    path: Path
+    profile: RealExperimentProfile
+    sha256: str
+
+
 class RealBenchmarkRunRecord(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -191,6 +234,7 @@ class RealBenchmarkSummary(BaseModel):
     cost: dict[str, str]
     latency: dict[str, float]
     agent_metrics: dict[str, object]
+    event_metrics: dict[str, object] = Field(default_factory=dict)
     paired_comparisons: dict[str, dict[str, object]]
     by_strategy: dict[str, dict[str, object]]
     by_language: dict[str, dict[str, object]]
@@ -343,6 +387,26 @@ def load_real_benchmark(path: Path) -> RealBenchmarkSuite:
         tasks=tuple(tasks),
         manifest_sha256=manifest_sha256,
         task_set_sha256=digest.hexdigest(),
+    )
+
+
+def load_real_experiment_profile(
+    path: Path, suite: RealBenchmarkSuite
+) -> LoadedRealExperimentProfile:
+    resolved = path.expanduser().resolve(strict=True)
+    if not resolved.is_file() or resolved.is_symlink():
+        raise BenchmarkError("real experiment profile must be a regular file")
+    try:
+        raw = resolved.read_bytes()
+        profile = RealExperimentProfile.model_validate(yaml.safe_load(raw.decode("utf-8")))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError, ValueError) as exc:
+        raise BenchmarkError(f"invalid real experiment profile: {exc}") from exc
+    if profile.base_benchmark_id != suite.manifest.id:
+        raise BenchmarkError("experiment profile does not target this benchmark")
+    return LoadedRealExperimentProfile(
+        path=resolved,
+        profile=profile,
+        sha256=hashlib.sha256(raw).hexdigest(),
     )
 
 

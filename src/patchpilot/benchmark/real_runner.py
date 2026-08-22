@@ -23,6 +23,7 @@ from patchpilot.agent.strategies import policy_for
 from patchpilot.artifacts import ArtifactKind, ArtifactStore
 from patchpilot.benchmark.models import BenchmarkError
 from patchpilot.benchmark.real_models import (
+    LoadedRealExperimentProfile,
     OutcomeClass,
     RealBenchmarkRunRecord,
     RealBenchmarkSuite,
@@ -30,6 +31,7 @@ from patchpilot.benchmark.real_models import (
     RealBenchmarkTask,
     RealSuiteKind,
     load_real_benchmark,
+    load_real_experiment_profile,
     real_run_key,
 )
 from patchpilot.benchmark.real_reporting import (
@@ -47,6 +49,7 @@ from patchpilot.domain.scorecard import (
     ScorecardArtifacts,
     ScorecardMetrics,
 )
+from patchpilot.domain.task import TaskSpec
 from patchpilot.models.base import (
     Message,
     MessageRole,
@@ -464,6 +467,82 @@ def _event_audit(events: list[dict[str, object]]) -> tuple[int, int, bool, bool]
     return model_attempts, retries, usage_estimated, gate_started == 1 and gate_passed
 
 
+def summarize_event_artifacts(
+    output: Path, records: list[RealBenchmarkRunRecord]
+) -> dict[str, object]:
+    apply_patch = {"successful": 0, "failed": 0}
+    run_tests = {"passed": 0, "tests_failed": 0, "tool_failed": 0}
+    context_compactions = 0
+    continued_runs = 0
+    post_pass_model_requests = 0
+    for record in records:
+        events = _read_events(output / record.artifact_directory / "events.jsonl")
+        first_public_pass: int | None = None
+        for index, event in enumerate(events):
+            event_type = event.get("type")
+            payload = event.get("payload")
+            if not isinstance(payload, dict):
+                payload = {}
+            tool = payload.get("tool")
+            if event_type == EventType.CONTEXT_COMPACTED.value:
+                context_compactions += 1
+            if tool == "apply_patch" and event_type in {
+                EventType.TOOL_COMPLETED.value,
+                EventType.TOOL_FAILED.value,
+            }:
+                bucket = "successful" if event_type == EventType.TOOL_COMPLETED.value else "failed"
+                apply_patch[bucket] += 1
+            if tool == "run_tests" and event_type in {
+                EventType.TOOL_COMPLETED.value,
+                EventType.TOOL_FAILED.value,
+            }:
+                if event_type == EventType.TOOL_FAILED.value:
+                    run_tests["tool_failed"] += 1
+                elif payload.get("output_summary") == "tests passed":
+                    run_tests["passed"] += 1
+                    if first_public_pass is None:
+                        first_public_pass = index
+                else:
+                    run_tests["tests_failed"] += 1
+        if first_public_pass is not None:
+            later_requests = sum(
+                event.get("type") == EventType.MODEL_REQUESTED.value
+                for event in events[first_public_pass + 1 :]
+            )
+            if later_requests:
+                continued_runs += 1
+                post_pass_model_requests += later_requests
+    limit_names = ("max_input_tokens", "max_output_tokens", "max_steps", "max_wall_time_seconds")
+    return {
+        "context_compactions": context_compactions,
+        "runs_continued_after_public_tests_passed": continued_runs,
+        "model_requests_after_public_tests_passed": post_pass_model_requests,
+        "apply_patch": apply_patch,
+        "run_tests": run_tests,
+        "limit_hits": {
+            name: sum(record.error_code == name for record in records) for name in limit_names
+        },
+    }
+
+
+def effective_experiment_task_spec(
+    spec: TaskSpec, profile: LoadedRealExperimentProfile | None
+) -> TaskSpec:
+    if profile is None:
+        return spec
+    override = profile.profile.budget
+    budget = spec.budget.model_copy(
+        update={
+            "max_input_tokens": override.max_input_tokens,
+            "max_output_tokens": override.max_output_tokens,
+            "max_steps": override.max_steps,
+            "max_wall_time_seconds": override.max_wall_time_seconds,
+            "max_cost_usd": override.max_cost_usd,
+        }
+    )
+    return spec.model_copy(update={"budget": budget})
+
+
 async def _run_one(
     suite: RealBenchmarkSuite,
     task: RealBenchmarkTask,
@@ -478,6 +557,7 @@ async def _run_one(
     base_model_config: ModelConfig,
     ledger: GlobalCostLedger,
     provider: str,
+    experiment_profile: LoadedRealExperimentProfile | None,
 ) -> RealBenchmarkRunRecord:
     started = datetime.now(UTC)
     started_clock = time.monotonic()
@@ -494,9 +574,10 @@ async def _run_one(
     error_code: str | None = None
     try:
         baseline_commit = await asyncio.to_thread(_prepare_repository, task, prepared)
-        rewritten_spec = task.spec.model_copy(
+        effective_spec = effective_experiment_task_spec(task.spec, experiment_profile)
+        rewritten_spec = effective_spec.model_copy(
             update={
-                "repository": task.spec.repository.model_copy(
+                "repository": effective_spec.repository.model_copy(
                     update={"path": str(prepared), "base_ref": "main"}
                 )
             }
@@ -678,6 +759,7 @@ def collect_reproducibility(
     repetitions: int,
     concurrency: int,
     task_limit: int | None,
+    experiment_profile: LoadedRealExperimentProfile | None = None,
 ) -> dict[str, object]:
     project_root = Path(__file__).resolve().parents[3]
     commit, dirty, diff_hash = _git_identity(project_root)
@@ -775,14 +857,35 @@ def collect_reproducibility(
             "git": _version(["git", "--version"], project_root),
         },
     }
-    fingerprint_material = json.dumps(
-        environment, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    )
-    environment["experiment_fingerprint"] = hashlib.sha256(
-        fingerprint_material.encode("utf-8")
-    ).hexdigest()
+    if experiment_profile is not None:
+        profile = experiment_profile.profile
+        environment.update(
+            {
+                "experiment_id": profile.id,
+                "experiment_classification": profile.classification,
+                "base_benchmark_id": profile.base_benchmark_id,
+                "experiment_profile_sha256": experiment_profile.sha256,
+                "budget_profile": profile.budget.model_dump(mode="json"),
+                "quality_constraints_unchanged": True,
+                "equal_budget_strategy_comparison": False,
+            }
+        )
+    environment["experiment_fingerprint"] = reproducibility_fingerprint(environment)
     environment["generated_at"] = datetime.now(UTC).isoformat()
     return environment
+
+
+def reproducibility_fingerprint(environment: dict[str, object]) -> str:
+    material = json.dumps(environment, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+def validate_resume_experiment(
+    existing: dict[str, object], current: dict[str, object]
+) -> dict[str, object]:
+    if existing.get("experiment_fingerprint") != current.get("experiment_fingerprint"):
+        raise BenchmarkError("resume configuration does not match experiment.json")
+    return existing
 
 
 def _load_records(path: Path) -> list[RealBenchmarkRunRecord]:
@@ -839,6 +942,7 @@ def _persist_summary(
         experiment=reproducibility,
         global_cost_limit=global_cost_limit,
         reserved_unknown_cost=unknown,
+        event_metrics=summarize_event_artifacts(output, records),
     )
     _atomic_text(output / "summary.json", summary.model_dump_json(indent=2) + "\n")
     _atomic_text(output / "report.md", render_real_markdown(summary))
@@ -921,12 +1025,28 @@ async def run_real_benchmark(
     repetitions: int | None = None,
     limit: int | None = None,
     concurrency: int | None = None,
+    experiment_profile_path: Path | None = None,
 ) -> RealBenchmarkOutput:
     config = require_real_model(settings, explicit_real_model=explicit_real_model)
     suite = load_real_benchmark(suite_path)
-    selected = strategies or tuple(suite.manifest.strategies)
-    repeat_count = repetitions or suite.manifest.repetitions
-    parallelism = concurrency or suite.manifest.concurrency
+    experiment_profile = (
+        load_real_experiment_profile(experiment_profile_path, suite)
+        if experiment_profile_path is not None
+        else None
+    )
+    if experiment_profile is None:
+        selected = strategies or tuple(suite.manifest.strategies)
+        repeat_count = repetitions or suite.manifest.repetitions
+        parallelism = concurrency or suite.manifest.concurrency
+    else:
+        if any(value is not None for value in (strategies, repetitions, limit, concurrency)):
+            raise BenchmarkError("experiment profile forbids matrix overrides")
+        profile = experiment_profile.profile
+        if global_cost_limit != profile.global_cost_limit_usd:
+            raise BenchmarkError("CLI global cost limit must exactly match experiment profile")
+        selected = (profile.strategy,)
+        repeat_count = profile.repetitions
+        parallelism = profile.concurrency
     if not provider.strip() or len(provider) > 128:
         raise BenchmarkError("provider label must contain 1 to 128 characters")
     if not selected or any(strategy not in suite.manifest.strategies for strategy in selected):
@@ -936,7 +1056,7 @@ async def run_real_benchmark(
     if not 1 <= parallelism <= 4:
         raise BenchmarkError("real benchmark concurrency must be between 1 and 4")
     if suite.manifest.suite_kind == RealSuiteKind.FORMAL:
-        if (
+        if experiment_profile is None and (
             strategies is not None
             or repetitions is not None
             or limit is not None
@@ -966,6 +1086,7 @@ async def run_real_benchmark(
         "report.md",
         "report.html",
         "runs",
+        ".work",
     }
     unexpected = {item.name for item in output.iterdir()} - allowed_existing
     if unexpected:
@@ -988,6 +1109,7 @@ async def run_real_benchmark(
         repetitions=repeat_count,
         concurrency=parallelism,
         task_limit=limit,
+        experiment_profile=experiment_profile,
     )
     experiment_path = output / "experiment.json"
     if experiment_path.is_file():
@@ -995,11 +1117,7 @@ async def run_real_benchmark(
             existing_experiment = json.loads(experiment_path.read_text("utf-8"))
         except json.JSONDecodeError as exc:
             raise BenchmarkError("existing experiment.json is invalid") from exc
-        if existing_experiment.get("experiment_fingerprint") != reproducibility.get(
-            "experiment_fingerprint"
-        ):
-            raise BenchmarkError("resume configuration does not match experiment.json")
-        reproducibility = existing_experiment
+        reproducibility = validate_resume_experiment(existing_experiment, reproducibility)
     else:
         _atomic_text(
             experiment_path,
@@ -1079,7 +1197,10 @@ async def run_real_benchmark(
         key: str,
     ) -> RealBenchmarkRunRecord:
         async with semaphore:
-            if not await ledger.can_start(task.spec.budget.max_cost_usd):
+            run_cost_limit = effective_experiment_task_spec(
+                task.spec, experiment_profile
+            ).budget.max_cost_usd
+            if not await ledger.can_start(run_cost_limit):
                 raise RealBenchmarkStopped(
                     "global cost limit cannot reserve the next fixed-matrix Run"
                 )
@@ -1095,7 +1216,7 @@ async def run_real_benchmark(
                         "strategy": strategy.value,
                         "repetition": repetition,
                         "started_at": datetime.now(UTC).isoformat(),
-                        "unknown_cost_reserve_usd": str(task.spec.budget.max_cost_usd),
+                        "unknown_cost_reserve_usd": str(run_cost_limit),
                     },
                 )
             return await _run_one(
@@ -1111,6 +1232,7 @@ async def run_real_benchmark(
                 base_model_config=config,
                 ledger=ledger,
                 provider=provider,
+                experiment_profile=experiment_profile,
             )
 
     jobs = [

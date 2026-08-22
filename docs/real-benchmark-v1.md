@@ -86,3 +86,28 @@ patchpilot benchmark real-estimate benchmarks/real-v1 \
 Stop after calibration and review actual tokens, cost, latency, cleanup audits, expected matrix
 cost, worst-case task-budget cost, estimated elapsed time, and rate-limit risk. Do not start the
 288-run formal matrix until the owner explicitly approves the global budget and the task-set hash.
+
+## Full-strategy high-budget ablation
+
+`benchmarks/real-v1/experiments/real-v1-full-high-budget-v1.yaml` defines an independent,
+exploratory budget ablation. It fixes all 24 frozen tasks, only the `full` strategy, three
+repetitions, concurrency one, a $10 global hard limit, and wide emergency Run limits. The profile
+cannot change scope, acceptance, Docker isolation, hidden tests, QualityGate scoring, prompt,
+temperature, or patch-size constraints. Its SHA-256 and budget configuration participate in a new
+experiment fingerprint, so it cannot resume or overwrite another experiment.
+
+Validate without network access, then explicitly authorize the paid run into its separate output
+directory:
+
+```text
+patchpilot benchmark real-experiment-validate benchmarks/real-v1 \
+  --profile benchmarks/real-v1/experiments/real-v1-full-high-budget-v1.yaml --json
+patchpilot benchmark real-experiment-run benchmarks/real-v1 \
+  --profile benchmarks/real-v1/experiments/real-v1-full-high-budget-v1.yaml \
+  --output benchmark-results/real-v1-full-high-budget-v1 \
+  --max-total-cost-usd 10.00 --real-model --json
+```
+
+The resulting report is labeled `full strategy high-budget ablation`. Its different Run budget
+makes it unsuitable for replacing the original `real-v1` full score or for the original
+equal-budget four-strategy ranking.
