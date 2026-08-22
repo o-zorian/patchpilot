@@ -36,3 +36,7 @@ def configure_logging(level: str) -> None:
     root.handlers.clear()
     root.addHandler(handler)
     root.setLevel(numeric_level)
+    # Third-party HTTP request logs include endpoint URLs and add no auditable
+    # benchmark evidence. Provider telemetry is persisted through redacted events.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)

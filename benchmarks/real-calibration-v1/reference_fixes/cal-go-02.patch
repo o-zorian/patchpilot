@@ -1,0 +1,13 @@
+diff --git a/header/header.go b/header/header.go
+--- a/header/header.go
++++ b/header/header.go
+@@ -4,5 +4,10 @@ import "strings"
+ 
+ func ContainsToken(value, token string) bool {
+-	return strings.Contains(strings.ToLower(value), strings.ToLower(token))
++	wanted := strings.ToLower(strings.TrimSpace(token))
++	for _, part := range strings.Split(value, ",") {
++		if strings.ToLower(strings.TrimSpace(part)) == wanted { return true }
++	}
++	return false
+ }

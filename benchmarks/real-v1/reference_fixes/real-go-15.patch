@@ -1,0 +1,11 @@
+diff --git a/contract/encode.go b/contract/encode.go
+--- a/contract/encode.go
++++ b/contract/encode.go
+@@ -6,7 +6,7 @@ func Encode(feature Feature) ([]byte, error) {
+ 	payload := struct {
+ 		Name    string `json:"name"`
+-		Enabled bool   `json:"enabled,omitempty"`
++		Enabled bool   `json:"enabled"`
+ 	}{Name: feature.Name, Enabled: feature.Enabled}
+ 	return json.Marshal(payload)
+ }

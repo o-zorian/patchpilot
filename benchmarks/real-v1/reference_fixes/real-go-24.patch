@@ -1,0 +1,34 @@
+diff --git a/idempotency/state.go b/idempotency/state.go
+--- a/idempotency/state.go
++++ b/idempotency/state.go
+@@ -5,11 +5,9 @@ type State struct {
+ }
+ 
+ func NewState() *State { return &State{done: map[string]int{}} }
+-func (s *State) Begin(key string) (int, bool) {
++func (s *State) Lookup(key string) (int, bool) {
+ 	value, ok := s.done[key]
+-	if !ok {
+-		s.done[key] = 0
+-	}
+ 	return value, ok
+ }
++func (s *State) Abort(key string)               { delete(s.done, key) }
+ func (s *State) Complete(key string, value int) { s.done[key] = value }
+diff --git a/idempotency/handler.go b/idempotency/handler.go
+--- a/idempotency/handler.go
++++ b/idempotency/handler.go
+@@ -1,11 +1,12 @@
+ package idempotency
+ 
+ func Execute(state *State, key string, operation func() (int, error)) (int, error) {
+-	if value, done := state.Begin(key); done {
++	if value, done := state.Lookup(key); done {
+ 		return value, nil
+ 	}
+ 	value, err := operation()
+ 	if err != nil {
++		state.Abort(key)
+ 		return 0, err
+ 	}
+ 	state.Complete(key, value)

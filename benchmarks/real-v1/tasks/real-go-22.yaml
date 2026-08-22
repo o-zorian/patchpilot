@@ -1,0 +1,11 @@
+version: "1"
+id: real-go-22
+title: Synchronize concurrent registry readers and writers
+repository: {path: repos/go-service, base_ref: main, language: go}
+goal: Registry must safely support concurrent Increment and Value calls with exact final counts. Use appropriate read/write synchronization and preserve the public API.
+allowed_paths: [registry/registry.go]
+denied_paths: [.git/**, "**/*_test.go"]
+acceptance: {commands: [{argv: [go, test, -race, ./registry], timeout_seconds: 60}], required_tests: [TestConcurrentIncrement]}
+budget: {max_steps: 20, max_input_tokens: 120000, max_output_tokens: 24000, max_cost_usd: 0.25, max_wall_time_seconds: 600, max_changed_files: 1, max_patch_lines: 180}
+execution: {network: false, cpu_limit: 2, memory_limit_mb: 768}
+metadata: {difficulty: hard, tags: [go, "defect:concurrency-state", regression-risk, curated-snapshot]}

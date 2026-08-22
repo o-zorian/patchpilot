@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from patchpilot.agent.registry import FinishInput, ToolRegistry
 from patchpilot.models.base import ToolCall
 from patchpilot.tools.base import success
+from patchpilot.tools.patch import ApplyPatchInput
 
 
 class EchoInput(BaseModel):
@@ -83,3 +84,12 @@ def test_registry_contains_only_explicit_tools() -> None:
     schema_names = {schema.name for schema in build_registry().schemas}
 
     assert schema_names == {"echo", "finish"}
+
+
+def test_apply_patch_schema_explains_the_required_git_diff_format() -> None:
+    schema = ApplyPatchInput.model_json_schema()
+    description = schema["properties"]["patch"]["description"]
+
+    assert "diff --git a/path b/path" in description
+    assert "@@" in description
+    assert "Do not use '*** Begin Patch'" in description

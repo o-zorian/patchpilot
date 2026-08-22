@@ -1,0 +1,36 @@
+diff --git a/realbench/clock.py b/realbench/clock.py
+--- a/realbench/clock.py
++++ b/realbench/clock.py
+@@ -4,4 +4,4 @@ from datetime import datetime
+ 
+ 
+ def seconds_until(target: datetime, now: datetime) -> int:
+-    return int((target - now).total_seconds())
++    return max(0, int((target - now).total_seconds()))
+diff --git a/realbench/parsing.py b/realbench/parsing.py
+--- a/realbench/parsing.py
++++ b/realbench/parsing.py
+@@ -1,6 +1,9 @@
+ from __future__ import annotations
+ 
+ from datetime import datetime
++from email.utils import parsedate_to_datetime
++
++from realbench.clock import seconds_until
+ 
+ 
+ def paginate(items: list[str], page: int, size: int) -> list[str]:
+@@ -20,8 +23,11 @@ def serialize_user(user: object) -> dict[str, object]:
+ 
+ 
+ def parse_retry_after(value: str, now: datetime) -> int:
+-    del now
+-    return max(0, int(value.strip()))
++    stripped = value.strip()
++    try:
++        return max(0, int(stripped))
++    except ValueError:
++        return seconds_until(parsedate_to_datetime(stripped), now)
+ 
+ 
+ def parse_csv_line(value: str) -> list[str]:

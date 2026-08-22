@@ -134,6 +134,8 @@ class AgentLoop:
         quality_gate: QualityGate | None = None,
         cancellation_token: CancellationToken | None = None,
         strategy_policy: StrategyPolicy | None = None,
+        prompt_version: str = PROMPT_VERSION,
+        include_repository_snapshot: bool = False,
     ) -> None:
         self.model_client = model_client
         self.model_config = model_config
@@ -146,17 +148,23 @@ class AgentLoop:
         self.quality_gate = quality_gate
         self.cancellation_token = cancellation_token or tool_context.cancellation_token
         self.strategy_policy = strategy_policy
+        self.prompt_version = prompt_version
+        self.include_repository_snapshot = include_repository_snapshot
 
     async def run(self, run_id: UUID) -> AgentLoopResult:
         if run_id != self.events.run_id:
             raise ValueError("AgentLoop run_id must match EventEmitter run_id")
-        messages = build_initial_messages(self.tool_context)
+        messages = build_initial_messages(
+            self.tool_context,
+            prompt_version=self.prompt_version,
+            include_repository_snapshot=self.include_repository_snapshot,
+        )
         await self.events.emit(
             EventType.RUN_CREATED,
             {
                 "task_id": self.tool_context.task_spec.id,
                 "model": self.model_config.model,
-                "prompt_version": PROMPT_VERSION,
+                "prompt_version": self.prompt_version,
             },
         )
         await self.events.emit(
@@ -351,6 +359,7 @@ class AgentLoop:
                                 finish_request=execution.finish_request,
                                 scorecard=outcome.scorecard,
                                 metrics=gate_metrics,
+                                prompt_version=self.prompt_version,
                             )
                         if (
                             outcome.recoverable
@@ -415,6 +424,7 @@ class AgentLoop:
                             finish_request=execution.finish_request,
                             scorecard=outcome.scorecard,
                             metrics=gate_metrics,
+                            prompt_version=self.prompt_version,
                         )
                     await self.events.emit(
                         EventType.RUN_COMPLETED,
@@ -431,6 +441,7 @@ class AgentLoop:
                         result_code="FINISH_REQUESTED",
                         finish_request=execution.finish_request,
                         metrics=metrics,
+                        prompt_version=self.prompt_version,
                     )
 
                 wall_stop = self.budget.check_non_step_limits()
@@ -544,6 +555,12 @@ class AgentLoop:
             return messages
         preserved = messages[:2]
         recent = messages[-6:]
+        # Chat Completions rejects a tool-result message when its originating
+        # assistant tool_call was compacted away. Keep only a protocol-complete
+        # suffix; because this is a suffix, all results following a retained
+        # assistant message remain present.
+        while recent and recent[0].role == MessageRole.TOOL:
+            recent = recent[1:]
         compacted_count = len(messages) - len(preserved) - len(recent)
         summary = Message(
             role=MessageRole.USER,
@@ -604,6 +621,7 @@ class AgentLoop:
             error_code=reason.value,
             scorecard=scorecard,
             metrics=metrics,
+            prompt_version=self.prompt_version,
         )
 
     async def _failure_result(
@@ -650,6 +668,7 @@ class AgentLoop:
             error_code=error_code,
             scorecard=scorecard,
             metrics=metrics,
+            prompt_version=self.prompt_version,
         )
 
     async def _cancelled_result(self, run_id: UUID) -> AgentLoopResult:
@@ -680,6 +699,7 @@ class AgentLoop:
             result_code=QualityResult.CANCELLED.value,
             scorecard=scorecard,
             metrics=metrics,
+            prompt_version=self.prompt_version,
         )
 
     @staticmethod

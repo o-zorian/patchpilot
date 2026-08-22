@@ -1,0 +1,11 @@
+version: "1"
+id: real-py-02
+title: Restore one-based pagination semantics
+repository: {path: repos/python-service, base_ref: main, language: python}
+goal: paginate uses a one-based page contract. Page 1 must start at item zero, and zero or negative pages must normalize to page 1. Keep size validation and slicing behavior.
+allowed_paths: [realbench/parsing.py]
+denied_paths: [.git/**, tests/**]
+acceptance: {commands: [{argv: [python, -m, pytest, tests/py02], timeout_seconds: 45}], required_tests: [test_first_page_starts_with_first_item]}
+budget: {max_steps: 20, max_input_tokens: 120000, max_output_tokens: 24000, max_cost_usd: 0.25, max_wall_time_seconds: 600, max_changed_files: 1, max_patch_lines: 100}
+execution: {network: false, cpu_limit: 2, memory_limit_mb: 768}
+metadata: {difficulty: easy, tags: [python, "defect:boundary", curated-snapshot]}

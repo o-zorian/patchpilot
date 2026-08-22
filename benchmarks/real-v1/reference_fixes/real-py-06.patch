@@ -1,0 +1,34 @@
+diff --git a/realbench/configuration.py b/realbench/configuration.py
+--- a/realbench/configuration.py
++++ b/realbench/configuration.py
+@@ -9,5 +9,11 @@ def clone_mapping(value: dict[str, Any]) -> dict[str, Any]:
+ 
+ def merge_config(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+     result = clone_mapping(base)
+-    result.update(override)
++    for key, value in override.items():
++        current = result.get(key)
++        if isinstance(current, dict) and isinstance(value, dict):
++            result[key] = merge_config(current, value)
++        else:
++            result[key] = deepcopy(value)
+     return result
+diff --git a/realbench/models.py b/realbench/models.py
+--- a/realbench/models.py
++++ b/realbench/models.py
+@@ -1,6 +1,7 @@
+ from __future__ import annotations
+ 
+ from dataclasses import dataclass, field
++from copy import deepcopy
+ from typing import Any
+@@ -12,6 +13,10 @@ class User:
+     quota: int | None = None
+ 
+ 
++def detached(value: Any) -> Any:
++    return deepcopy(value)
++
++
+ @dataclass
+ class CacheEntry:

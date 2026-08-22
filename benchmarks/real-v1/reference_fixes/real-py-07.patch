@@ -1,0 +1,14 @@
+diff --git a/realbench/parsing.py b/realbench/parsing.py
+--- a/realbench/parsing.py
++++ b/realbench/parsing.py
+@@ -1,5 +1,6 @@
+ from __future__ import annotations
+ 
++import csv
+ from datetime import datetime
+@@ -25,4 +26,4 @@ def parse_retry_after(value: str, now: datetime) -> int:
+ 
+ 
+ def parse_csv_line(value: str) -> list[str]:
+-    return [part.strip() for part in value.split(",")]
++    return next(csv.reader([value], skipinitialspace=True))

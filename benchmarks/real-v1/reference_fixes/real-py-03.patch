@@ -1,0 +1,11 @@
+diff --git a/realbench/parsing.py b/realbench/parsing.py
+--- a/realbench/parsing.py
++++ b/realbench/parsing.py
+@@ -14,7 +14,7 @@ def serialize_user(user: object) -> dict[str, object]:
+     result = {"id": getattr(user, "id"), "name": getattr(user, "name")}  # noqa: B009
+     for field in ("active", "quota"):
+         value = getattr(user, field)
+-        if value:
++        if value is not None:
+             result[field] = value
+     return result

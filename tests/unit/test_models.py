@@ -27,6 +27,7 @@ def model_config() -> ModelConfig:
         base_url="https://model.example.invalid/v1",
         api_key=SecretStr("test-key"),
         model="offline-test",
+        thinking_mode="disabled",
         input_cost_per_million_usd=Decimal("2"),
         output_cost_per_million_usd=Decimal("8"),
     )
@@ -40,6 +41,7 @@ async def test_openai_compatible_client_maps_structured_calls_without_network() 
         body = json.loads(request.content)
         assert body["messages"][0]["role"] == "user"
         assert body["tools"][0]["function"]["name"] == "read_file"
+        assert body["thinking"] == {"type": "disabled"}
         return httpx.Response(
             200,
             json={
@@ -145,10 +147,12 @@ def test_real_model_settings_are_explicit_and_keep_the_key_secret() -> None:
         patchpilot_enable_real_model=True,
         model_name="configured-model",
         model_api_key="configured-secret",
+        model_thinking_mode="disabled",
     )
     configured = settings.real_model_config()
 
     assert configured.model == "configured-model"
+    assert configured.thinking_mode == "disabled"
     assert configured.api_key is not None
     assert configured.api_key.get_secret_value() == "configured-secret"
     assert "configured-secret" not in repr(configured)

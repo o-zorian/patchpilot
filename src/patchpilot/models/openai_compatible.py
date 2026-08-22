@@ -78,6 +78,8 @@ class OpenAICompatibleClient:
             "temperature": config.temperature,
             "max_tokens": config.max_tokens,
         }
+        if config.thinking_mode is not None:
+            request_payload["thinking"] = {"type": config.thinking_mode}
         endpoint = f"{config.base_url.rstrip('/')}/chat/completions"
         started = time.monotonic()
         try:

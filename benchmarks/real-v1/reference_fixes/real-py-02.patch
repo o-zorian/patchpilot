@@ -1,0 +1,9 @@
+diff --git a/realbench/parsing.py b/realbench/parsing.py
+--- a/realbench/parsing.py
++++ b/realbench/parsing.py
+@@ -6,7 +6,7 @@ def paginate(items: list[str], page: int, size: int) -> list[str]:
+     if size <= 0:
+         raise ValueError("size must be positive")
+-    start = max(page, 1) * size
++    start = (max(page, 1) - 1) * size
+     return items[start : start + size]

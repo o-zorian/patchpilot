@@ -1,0 +1,11 @@
+version: "1"
+id: real-go-16
+title: Invalidate the renamed user cache entry
+repository: {path: repos/go-service, base_ref: main, language: go}
+goal: Service.Rename must ensure later Get calls observe the updated store value without clearing unrelated cached users. Add an explicit cache deletion API.
+allowed_paths: [usercache/cache.go, usercache/service.go]
+denied_paths: [.git/**, "**/*_test.go"]
+acceptance: {commands: [{argv: [go, test, ./usercache], timeout_seconds: 45}], required_tests: [TestRenameInvalidatesCache]}
+budget: {max_steps: 20, max_input_tokens: 120000, max_output_tokens: 24000, max_cost_usd: 0.25, max_wall_time_seconds: 600, max_changed_files: 2, max_patch_lines: 160}
+execution: {network: false, cpu_limit: 2, memory_limit_mb: 768}
+metadata: {difficulty: medium, tags: [go, "defect:cache-invalidation", multi-file, curated-snapshot]}

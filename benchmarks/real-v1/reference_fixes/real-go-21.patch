@@ -1,0 +1,10 @@
+diff --git a/wrapped/lookup.go b/wrapped/lookup.go
+--- a/wrapped/lookup.go
++++ b/wrapped/lookup.go
+@@ -3,5 +3,5 @@ package wrapped
+ import "fmt"
+ 
+ func Lookup(id string) error {
+-	return fmt.Errorf("lookup %s: %v", id, ErrNotFound)
++	return fmt.Errorf("lookup %s: %w", id, ErrNotFound)
+ }

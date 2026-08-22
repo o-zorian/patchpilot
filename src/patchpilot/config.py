@@ -52,6 +52,7 @@ class AppSettings(BaseSettings):
     tool_max_file_bytes: int = Field(default=1_048_576, gt=0)
 
     model_base_url: str = "https://api.openai.com/v1"
+    model_provider: str = Field(default="openai-compatible", min_length=1, max_length=128)
     patchpilot_enable_real_model: bool = False
     model_api_key: SecretStr | None = None
     model_name: str | None = None
@@ -59,6 +60,7 @@ class AppSettings(BaseSettings):
     model_max_tokens: int = Field(default=4_096, gt=0)
     model_request_timeout_seconds: float = Field(default=60, gt=0)
     model_max_retries: int = Field(default=3, ge=0, le=3)
+    model_thinking_mode: Literal["provider_default", "enabled", "disabled"] = "provider_default"
     model_input_cost_per_million_usd: Decimal = Field(default=Decimal("0"), ge=0)
     model_output_cost_per_million_usd: Decimal = Field(default=Decimal("0"), ge=0)
 
@@ -110,6 +112,9 @@ class AppSettings(BaseSettings):
             max_tokens=self.model_max_tokens,
             request_timeout_seconds=self.model_request_timeout_seconds,
             max_retries=self.model_max_retries,
+            thinking_mode=(
+                None if self.model_thinking_mode == "provider_default" else self.model_thinking_mode
+            ),
             input_cost_per_million_usd=self.model_input_cost_per_million_usd,
             output_cost_per_million_usd=self.model_output_cost_per_million_usd,
         )

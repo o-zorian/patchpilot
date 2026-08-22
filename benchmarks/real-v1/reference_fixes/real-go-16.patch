@@ -1,0 +1,17 @@
+diff --git a/usercache/cache.go b/usercache/cache.go
+--- a/usercache/cache.go
++++ b/usercache/cache.go
+@@ -7,3 +7,4 @@ type Cache struct {
+ func NewCache() *Cache                      { return &Cache{values: map[string]User{}} }
+ func (c *Cache) Get(id string) (User, bool) { value, ok := c.values[id]; return value, ok }
+ func (c *Cache) Put(user User)              { c.values[user.ID] = user }
++func (c *Cache) Delete(id string)           { delete(c.values, id) }
+diff --git a/usercache/service.go b/usercache/service.go
+--- a/usercache/service.go
++++ b/usercache/service.go
+@@ -31,4 +31,5 @@ func (s *Service) Rename(id, name string) {
+ 	value := s.store[id]
+ 	value.Name = name
+ 	s.store[id] = value
++	s.cache.Delete(id)
+ }

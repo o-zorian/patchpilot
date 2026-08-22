@@ -1,0 +1,31 @@
+diff --git a/realbench/events.py b/realbench/events.py
+--- a/realbench/events.py
++++ b/realbench/events.py
+@@ -1,6 +1,7 @@
+ from __future__ import annotations
+ 
+ from collections.abc import Callable
++from threading import Lock
+ 
+ from realbench.models import EventState
+ 
+@@ -9,11 +10,13 @@ class EventProcessor:
+     def __init__(self, state: EventState) -> None:
+         self.state = state
+         self._seen: set[str] = set()
++        self._lock = Lock()
+ 
+     def apply(self, event_id: str, effect: Callable[[], None]) -> bool:
+-        if event_id in self._seen:
+-            return False
+-        effect()
+-        self._seen.add(event_id)
+-        self.state.applied.append(event_id)
+-        return True
++        with self._lock:
++            if event_id in self._seen:
++                return False
++            effect()
++            self._seen.add(event_id)
++            self.state.applied.append(event_id)
++            return True

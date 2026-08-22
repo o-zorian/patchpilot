@@ -1,0 +1,12 @@
+diff --git a/cursor/cursor.go b/cursor/cursor.go
+--- a/cursor/cursor.go
++++ b/cursor/cursor.go
+@@ -23,5 +23,8 @@ func Parse(value string) (Cursor, error) {
+ 	if err != nil {
+ 		return Cursor{}, fmt.Errorf("invalid limit")
+ 	}
++	if offset < 0 || limit <= 0 || limit > 1000 {
++		return Cursor{}, fmt.Errorf("cursor values out of range")
++	}
+ 	return Cursor{Offset: offset, Limit: limit}, nil
+ }

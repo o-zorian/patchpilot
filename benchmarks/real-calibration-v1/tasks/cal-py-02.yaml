@@ -1,0 +1,11 @@
+version: "1"
+id: cal-py-02
+title: Normalize only the email domain
+repository: {path: repos/calibration, base_ref: main, language: python}
+goal: normalize_email must lowercase the domain while preserving the case-sensitive local part and the separator.
+allowed_paths: [calibration.py]
+denied_paths: [.git/**, tests/**]
+acceptance: {commands: [{argv: [python, -m, pytest, tests/py02], timeout_seconds: 30}], required_tests: [test_normalize_domain_only]}
+budget: {max_steps: 12, max_input_tokens: 60000, max_output_tokens: 10000, max_cost_usd: 0.12, max_wall_time_seconds: 300, max_changed_files: 1, max_patch_lines: 80}
+execution: {network: false, cpu_limit: 1, memory_limit_mb: 512}
+metadata: {difficulty: easy, tags: [python, "defect:normalization", calibration]}

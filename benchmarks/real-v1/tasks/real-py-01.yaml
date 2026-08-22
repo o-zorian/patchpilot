@@ -1,0 +1,11 @@
+version: "1"
+id: real-py-01
+title: Enforce path containment without sibling-prefix confusion
+repository: {path: repos/python-service, base_ref: main, language: python}
+goal: Make safe_join accept resolved children of root and reject traversal into siblings whose names merely share the root prefix. Preserve the Path return type.
+allowed_paths: [realbench/paths.py]
+denied_paths: [.git/**, tests/**]
+acceptance: {commands: [{argv: [python, -m, pytest, tests/py01], timeout_seconds: 45}], required_tests: [test_rejects_parent_traversal, test_accepts_child]}
+budget: {max_steps: 20, max_input_tokens: 120000, max_output_tokens: 24000, max_cost_usd: 0.25, max_wall_time_seconds: 600, max_changed_files: 1, max_patch_lines: 120}
+execution: {network: false, cpu_limit: 2, memory_limit_mb: 768}
+metadata: {difficulty: easy, tags: [python, "defect:path-security", curated-snapshot]}

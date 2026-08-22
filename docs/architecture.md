@@ -56,6 +56,29 @@ sequenceDiagram
     Gate-->>User: Patch, events, tests, Scorecard, reports
 ```
 
+## Real Benchmark v1 execution
+
+```mermaid
+flowchart LR
+    CLI["Explicit real-* CLI"] --> GATE{"enable flag + key + --real-model"}
+    GATE --> HOST["Host-only OpenAI-compatible adapter"]
+    HOST --> CAP["Per-request reservation + global cost ledger"]
+    CAP --> LOOP["Same bounded Agent Loop"]
+    LOOP --> WS["Disposable Git Workspace"]
+    WS --> DOCKER["Non-root, networkless Docker Sandbox"]
+    DOCKER --> QG["Quality Gate injects hidden test"]
+    QG --> RUN["Run artifacts + atomic raw.jsonl checkpoint"]
+    RUN --> REPORT["summary.json + Markdown/HTML reports"]
+    QG -. "hidden source and assertions withheld" .-> LOOP
+```
+
+The benchmark copies a curated repository snapshot and creates a deterministic baseline commit;
+the committed snapshot itself is hash-checked before and after every fixture audit. Model calls run
+only on the host. The API key and Authorization header are never placed in the Workspace, Docker
+environment, event stream, reports, or command arguments. Each formal task receives the same
+bounded repository snapshot, model, prompt version, temperature, and task budget under all four
+strategies; only the documented policy capabilities differ.
+
 ## Trust boundaries
 
 - Model output is untrusted. It can select only registered tools with validated Pydantic inputs.

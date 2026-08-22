@@ -146,7 +146,12 @@ def _validate_acceptance_profile(spec: TaskSpec) -> None:
             raise ValueError("the Go profile accepts only go test or go vet")
         if len(argv) < 3:
             raise ValueError("Go test and vet commands require at least one package path")
-        for package in argv[2:]:
+        arguments = argv[2:]
+        if arguments[0] == "-race" and argv[:2] == ["go", "test"]:
+            arguments = arguments[1:]
+        if not arguments:
+            raise ValueError("Go test and vet commands require at least one package path")
+        for package in arguments:
             validate_go_package(package)
 
 

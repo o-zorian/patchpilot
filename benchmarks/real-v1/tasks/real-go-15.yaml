@@ -1,0 +1,11 @@
+version: "1"
+id: real-go-15
+title: Keep explicit false in the JSON wire contract
+repository: {path: repos/go-service, base_ref: main, language: go}
+goal: Encode must always emit the enabled JSON field for both true and false, because omission has a different client meaning. Preserve the existing Feature API.
+allowed_paths: [contract/encode.go, contract/model.go]
+denied_paths: [.git/**, "**/*_test.go"]
+acceptance: {commands: [{argv: [go, test, ./contract], timeout_seconds: 45}], required_tests: [TestEncodeIncludesFalse]}
+budget: {max_steps: 20, max_input_tokens: 120000, max_output_tokens: 24000, max_cost_usd: 0.25, max_wall_time_seconds: 600, max_changed_files: 2, max_patch_lines: 120}
+execution: {network: false, cpu_limit: 2, memory_limit_mb: 768}
+metadata: {difficulty: medium, tags: [go, "defect:serialization-contract", curated-snapshot]}

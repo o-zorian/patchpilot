@@ -1,0 +1,44 @@
+diff --git a/realbench/models.py b/realbench/models.py
+--- a/realbench/models.py
++++ b/realbench/models.py
+@@ -24,6 +24,12 @@ class Job:
+     submitted_at: int
+ 
+ 
++@dataclass(frozen=True)
++class PermissionKey:
++    user_id: str
++    project_id: str
++
++
+ @dataclass(frozen=True)
+ class Dependency:
+     name: str
+diff --git a/realbench/security.py b/realbench/security.py
+--- a/realbench/security.py
++++ b/realbench/security.py
+@@ -2,10 +2,12 @@ from __future__ import annotations
+ 
+ from collections.abc import Callable
+ 
++from realbench.models import PermissionKey
++
+ 
+ class PermissionCache:
+     def __init__(self) -> None:
+-        self._values: dict[str, bool] = {}
++        self._values: dict[PermissionKey, bool] = {}
+ 
+     def authorize(
+         self,
+@@ -13,6 +15,7 @@ class PermissionCache:
+         project_id: str,
+         loader: Callable[[str, str], bool],
+     ) -> bool:
+-        if user_id not in self._values:
+-            self._values[user_id] = loader(user_id, project_id)
+-        return self._values[user_id]
++        key = PermissionKey(user_id, project_id)
++        if key not in self._values:
++            self._values[key] = loader(user_id, project_id)
++        return self._values[key]

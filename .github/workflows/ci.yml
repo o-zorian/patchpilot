@@ -35,6 +35,10 @@ jobs:
         run: python -m pytest -m "not docker"
       - name: Validate benchmark manifest
         run: patchpilot benchmark validate benchmarks/local-v1 --json
+      - name: Validate real Benchmark metadata without a model
+        run: |
+          patchpilot benchmark real-validate benchmarks/real-calibration-v1 --json
+          patchpilot benchmark real-validate benchmarks/real-v1 --json
       - name: Run one offline Benchmark task
         run: >-
           patchpilot benchmark run benchmarks/local-v1
@@ -47,7 +51,7 @@ jobs:
 
   docker-sandbox:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
@@ -65,3 +69,7 @@ jobs:
           PATCHPILOT_RUN_DOCKER_TESTS: "1"
           SANDBOX_DOCKER_BINARY: docker
         run: python -m pytest -m docker
+      - name: Audit real Benchmark baselines and reference fixes
+        run: |
+          patchpilot benchmark real-validate benchmarks/real-calibration-v1 --verify-fixtures --json
+          patchpilot benchmark real-validate benchmarks/real-v1 --verify-fixtures --json

@@ -1,0 +1,21 @@
+diff --git a/realbench/cache.py b/realbench/cache.py
+--- a/realbench/cache.py
++++ b/realbench/cache.py
+@@ -13,3 +13,6 @@ class UserCache:
+ 
+     def put(self, user_id: str, value: object) -> None:
+         self._entries[user_id] = CacheEntry(value)
++
++    def invalidate(self, user_id: str) -> None:
++        self._entries.pop(user_id, None)
+diff --git a/realbench/services.py b/realbench/services.py
+--- a/realbench/services.py
++++ b/realbench/services.py
+@@ -22,6 +22,7 @@ class UserService:
+     def rename(self, user_id: str, name: str) -> None:
+         user = self.store.get(user_id)
+         self.store.save(replace(user, name=name))
++        self.cache.invalidate(user_id)
+ 
+ 
+ def transfer(store: AccountStore, source: str, target: str, amount: int) -> None:

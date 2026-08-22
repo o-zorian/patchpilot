@@ -1,0 +1,11 @@
+version: "1"
+id: cal-py-01
+title: Correct clamp boundary direction
+repository: {path: repos/calibration, base_ref: main, language: python}
+goal: clamp must return lower below range, upper above range, and the input inside range.
+allowed_paths: [calibration.py]
+denied_paths: [.git/**, tests/**]
+acceptance: {commands: [{argv: [python, -m, pytest, tests/py01], timeout_seconds: 30}], required_tests: [test_clamp_below_lower]}
+budget: &pybudget {max_steps: 12, max_input_tokens: 60000, max_output_tokens: 10000, max_cost_usd: 0.12, max_wall_time_seconds: 300, max_changed_files: 1, max_patch_lines: 80}
+execution: {network: false, cpu_limit: 1, memory_limit_mb: 512}
+metadata: {difficulty: easy, tags: [python, "defect:boundary", calibration]}

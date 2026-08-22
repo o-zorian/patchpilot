@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
@@ -79,6 +79,7 @@ class ModelConfig(BaseModel):
     max_tokens: int = Field(default=4_096, gt=0)
     request_timeout_seconds: float = Field(default=60, gt=0)
     max_retries: int = Field(default=3, ge=0, le=3)
+    thinking_mode: Literal["enabled", "disabled"] | None = None
     retry_base_seconds: float = Field(default=0.25, ge=0)
     retry_max_seconds: float = Field(default=4, ge=0)
     input_cost_per_million_usd: Decimal = Field(default=Decimal("0"), ge=0)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any
 from uuid import UUID
@@ -12,6 +13,14 @@ from pydantic import ValidationError
 
 from patchpilot import __version__
 from patchpilot.benchmark.models import BenchmarkError, load_benchmark
+from patchpilot.benchmark.real_models import RealBenchmarkRunRecord, load_real_benchmark
+from patchpilot.benchmark.real_runner import (
+    RealBenchmarkStopped,
+    estimate_full_matrix,
+    ping_real_model,
+    run_real_benchmark,
+    verify_real_fixtures,
+)
 from patchpilot.benchmark.runner import compare_summaries, run_benchmark
 from patchpilot.config import AppSettings, SettingsError
 from patchpilot.domain.run import Run, RunStrategy
@@ -392,3 +401,222 @@ def compare_benchmark(
         typer.echo(compare_summaries(summaries), nl=False)
     except BenchmarkError as exc:
         _fail(str(exc), json_output=False)
+
+
+@benchmark_app.command("real-validate")
+def validate_real_benchmark(
+    path: Annotated[Path, typer.Argument(exists=True, file_okay=False, readable=True)],
+    verify_fixtures: Annotated[
+        bool,
+        typer.Option(
+            "--verify-fixtures",
+            help="Run every baseline and human reference repair in the Docker Sandbox.",
+        ),
+    ] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Validate an independent real-model suite without making model API calls."""
+
+    settings = _settings()
+    try:
+        suite = load_real_benchmark(path)
+        fixture_results = (
+            asyncio.run(verify_real_fixtures(path, settings=settings)) if verify_fixtures else []
+        )
+    except (BenchmarkError, OSError, RuntimeError, ValueError) as exc:
+        _fail(str(exc), json_output=json_output)
+    languages = {
+        language: sum(task.language == language for task in suite.tasks)
+        for language in ("python", "go")
+    }
+    difficulties = {
+        difficulty: sum(task.difficulty == difficulty for task in suite.tasks)
+        for difficulty in ("easy", "medium", "hard")
+    }
+    payload = {
+        "ok": True,
+        "benchmark_id": suite.manifest.id,
+        "suite_kind": suite.manifest.suite_kind.value,
+        "frozen": suite.manifest.frozen,
+        "tasks": len(suite.tasks),
+        "languages": languages,
+        "difficulties": difficulties,
+        "defect_categories": sorted({task.defect for task in suite.tasks}),
+        "multi_file_tasks": sum(task.source.changed_files_expected >= 2 for task in suite.tasks),
+        "manifest_sha256": suite.manifest_sha256,
+        "task_set_sha256": suite.task_set_sha256,
+        "fixture_runs_verified": len(fixture_results),
+        "network_model_calls": False,
+    }
+    _emit(
+        payload,
+        json_output=json_output,
+        human=(
+            f"Valid {suite.manifest.suite_kind.value} suite {suite.manifest.id}: "
+            f"{len(suite.tasks)} tasks; fixture audits={len(fixture_results)}; "
+            f"manifest SHA-256 {suite.manifest_sha256}"
+        ),
+    )
+
+
+@benchmark_app.command("real-ping")
+def real_model_ping(
+    real_model: Annotated[
+        bool,
+        typer.Option(
+            "--real-model",
+            help="Explicitly authorize one paid compatibility request.",
+        ),
+    ] = False,
+    max_total_cost_usd: Annotated[
+        float,
+        typer.Option("--max-total-cost-usd", min=0.000001),
+    ] = 0.02,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    settings = _settings()
+    try:
+        result = asyncio.run(
+            ping_real_model(
+                settings,
+                explicit_real_model=real_model,
+                provider=settings.model_provider,
+                global_cost_limit=Decimal(str(max_total_cost_usd)),
+            )
+        )
+    except (BenchmarkError, SettingsError, OSError, RuntimeError, ValueError) as exc:
+        _fail(str(exc), json_output=json_output)
+    payload = {
+        "ok": True,
+        "provider": result.provider,
+        "requested_model": result.requested_model,
+        "actual_model": result.actual_model,
+        "prompt_tokens": result.prompt_tokens,
+        "completion_tokens": result.completion_tokens,
+        "estimated_cost_usd": str(result.estimated_cost_usd),
+        "usage_estimated": result.usage_estimated,
+        "latency_ms": result.latency_ms,
+        "structured_tool_call": True,
+    }
+    _emit(
+        payload,
+        json_output=json_output,
+        human=(
+            f"Real model compatibility passed: {result.actual_model}; "
+            f"tokens={result.prompt_tokens + result.completion_tokens}; "
+            f"cost=${result.estimated_cost_usd}; latency={result.latency_ms}ms"
+        ),
+    )
+
+
+@benchmark_app.command("real-run")
+def execute_real_benchmark(
+    path: Annotated[Path, typer.Argument(exists=True, file_okay=False, readable=True)],
+    output: Annotated[Path, typer.Option("--output", "-o", file_okay=False)],
+    max_total_cost_usd: Annotated[
+        float,
+        typer.Option("--max-total-cost-usd", min=0.000001),
+    ],
+    real_model: Annotated[
+        bool,
+        typer.Option(
+            "--real-model",
+            help="Explicitly authorize paid model calls for this command.",
+        ),
+    ] = False,
+    strategy: Annotated[
+        list[RunStrategy] | None,
+        typer.Option("--strategy", help="Calibration only; repeat to select strategies."),
+    ] = None,
+    repetitions: Annotated[int | None, typer.Option("--repetitions", min=1, max=3)] = None,
+    limit: Annotated[
+        int | None,
+        typer.Option("--limit", min=1, help="Calibration only; forbidden for formal real-v1."),
+    ] = None,
+    concurrency: Annotated[int | None, typer.Option("--concurrency", min=1, max=4)] = None,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    settings = _settings()
+    try:
+        result = asyncio.run(
+            run_real_benchmark(
+                path,
+                output,
+                settings=settings,
+                explicit_real_model=real_model,
+                provider=settings.model_provider,
+                global_cost_limit=Decimal(str(max_total_cost_usd)),
+                strategies=tuple(strategy) if strategy else None,
+                repetitions=repetitions,
+                limit=limit,
+                concurrency=concurrency,
+            )
+        )
+    except RealBenchmarkStopped as exc:
+        _fail(str(exc), json_output=json_output)
+    except (BenchmarkError, SettingsError, OSError, RuntimeError, ValueError) as exc:
+        _fail(str(exc), json_output=json_output)
+    payload = {
+        "ok": True,
+        "benchmark_id": result.summary.benchmark_id,
+        "suite_kind": result.summary.suite_kind.value,
+        "persisted_runs": result.summary.counts["persisted_runs"],
+        "task_results": result.summary.counts["task_results"],
+        "api_errors": result.summary.counts["api_errors"],
+        "infrastructure_errors": result.summary.counts["infrastructure_errors"],
+        "accounted_cost_usd": result.summary.cost["accounted_cost_usd"],
+        "resumed_runs": result.resumed_runs,
+        "output_directory": str(result.output_directory),
+    }
+    _emit(
+        payload,
+        json_output=json_output,
+        human=(
+            f"Real Benchmark {result.summary.benchmark_id}: "
+            f"{result.summary.counts['persisted_runs']} persisted runs; "
+            f"accounted cost ${result.summary.cost['accounted_cost_usd']}; "
+            f"reports in {result.output_directory}"
+        ),
+    )
+
+
+@benchmark_app.command("real-estimate")
+def estimate_real_benchmark(
+    path: Annotated[Path, typer.Argument(exists=True, file_okay=False, readable=True)],
+    calibration_raw: Annotated[
+        Path | None,
+        typer.Option(
+            "--calibration-raw",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help="Optional real calibration raw.jsonl used for observed estimates.",
+        ),
+    ] = None,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    settings = _settings()
+    try:
+        suite = load_real_benchmark(path)
+        records: list[RealBenchmarkRunRecord] = []
+        if calibration_raw is not None:
+            for line in calibration_raw.read_text("utf-8").splitlines():
+                if line.strip():
+                    records.append(RealBenchmarkRunRecord.model_validate_json(line))
+        estimate = estimate_full_matrix(
+            suite,
+            input_cost_per_million=settings.model_input_cost_per_million_usd,
+            output_cost_per_million=settings.model_output_cost_per_million_usd,
+            observed_records=records,
+        )
+    except (BenchmarkError, OSError, ValueError) as exc:
+        _fail(str(exc), json_output=json_output)
+    _emit(
+        {"ok": True, **estimate},
+        json_output=json_output,
+        human=(
+            f"Full matrix: {estimate['runs']} runs; expected usage cost "
+            f"${estimate['expected_usage_cost_usd']}; task-budget worst case "
+            f"${estimate['worst_case_task_budget_cost_usd']}"
+        ),
+    )

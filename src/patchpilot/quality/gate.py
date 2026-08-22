@@ -274,12 +274,21 @@ class QualityGate:
         recoverable = result in self._RECOVERABLE and budget_valid
         feedback = None
         if failure is not None and recoverable:
+            hidden_failure = self.hidden_test is not None and bool(test_suite.failed_tests)
             feedback = {
                 "type": "quality_gate_feedback",
                 "result": result.value,
-                "summary": failure.summary,
-                "failed_tests": failure.failed_tests,
-                "error_excerpt": failure.error_excerpt,
+                "summary": (
+                    "Acceptance tests failed; hidden details are withheld from the model."
+                    if hidden_failure
+                    else failure.summary
+                ),
+                "failed_tests": [] if hidden_failure else failure.failed_tests,
+                "error_excerpt": (
+                    "A hidden acceptance test failed; details are withheld from the model."
+                    if hidden_failure
+                    else failure.error_excerpt
+                ),
                 "diff_summary": {
                     "changed_files": snapshot.changed_files,
                     "added_lines": snapshot.added_lines,
@@ -377,7 +386,7 @@ class QualityGate:
         environment = dict(profile.environment)
         environment.update(self.acceptance_environment)
         if self.context.task_spec.repository.language == "go":
-            if "GOCACHE" not in environment:
+            if "GOCACHE" not in environment and self.context.command_sandbox.isolation != "docker":
                 go_cache = self.context.workspace.path / ".patchpilot-go-cache"
                 environment["GOCACHE"] = str(go_cache)
         try:

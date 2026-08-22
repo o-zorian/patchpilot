@@ -1,0 +1,11 @@
+version: "1"
+id: real-go-24
+title: Do not commit failed idempotent operations
+repository: {path: repos/go-service, base_ref: main, language: go}
+goal: Execute must cache and reuse successful results, but a failed operation must not mark the key complete and must be retried on the next call. Keep state transitions explicit across State and Execute.
+allowed_paths: [idempotency/state.go, idempotency/handler.go]
+denied_paths: [.git/**, "**/*_test.go"]
+acceptance: {commands: [{argv: [go, test, ./idempotency], timeout_seconds: 45}], required_tests: [TestFailureCanBeRetried]}
+budget: {max_steps: 20, max_input_tokens: 120000, max_output_tokens: 24000, max_cost_usd: 0.25, max_wall_time_seconds: 600, max_changed_files: 2, max_patch_lines: 180}
+execution: {network: false, cpu_limit: 2, memory_limit_mb: 768}
+metadata: {difficulty: hard, tags: [go, "defect:idempotency-state", multi-file, curated-snapshot]}

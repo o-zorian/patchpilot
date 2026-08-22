@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from pathlib import Path
 from uuid import uuid4
 
@@ -16,7 +17,9 @@ def docker_binary() -> str:
     if os.environ.get("PATCHPILOT_RUN_DOCKER_TESTS") != "1":
         pytest.skip("set PATCHPILOT_RUN_DOCKER_TESTS=1 to run real Docker isolation tests")
     value = os.environ.get("SANDBOX_DOCKER_BINARY", "docker")
-    if not Path(value).is_file() and value == "docker":
+    if value == "docker" and shutil.which(value) is None:
+        pytest.skip("Docker CLI is unavailable")
+    if value != "docker" and not Path(value).is_file():
         pytest.skip("Docker CLI is unavailable")
     return value
 

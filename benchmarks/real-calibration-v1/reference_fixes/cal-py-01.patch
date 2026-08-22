@@ -1,0 +1,12 @@
+diff --git a/calibration.py b/calibration.py
+--- a/calibration.py
++++ b/calibration.py
+@@ -1,8 +1,8 @@
+ def clamp(value: int, lower: int, upper: int) -> int:
+     if value < lower:
+-        return upper
++        return lower
+     if value > upper:
+-        return lower
++        return upper
+     return value

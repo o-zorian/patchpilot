@@ -1,0 +1,11 @@
+version: "1"
+id: real-py-11
+title: Detect dependency cycles and skip unavailable optional components
+repository: {path: repos/python-service, base_ref: main, language: python}
+goal: resolve_dependencies must produce dependency-before-dependent order, raise a clear ValueError for cycles, raise for missing required dependencies, and omit an optional dependency when one of its requirements is unavailable.
+allowed_paths: [realbench/resolver.py]
+denied_paths: [.git/**, tests/**]
+acceptance: {commands: [{argv: [python, -m, pytest, tests/py11], timeout_seconds: 45}], required_tests: [test_cycle_is_reported_without_recursion_overflow, test_dependency_order]}
+budget: {max_steps: 20, max_input_tokens: 120000, max_output_tokens: 24000, max_cost_usd: 0.25, max_wall_time_seconds: 600, max_changed_files: 1, max_patch_lines: 180}
+execution: {network: false, cpu_limit: 2, memory_limit_mb: 768}
+metadata: {difficulty: hard, tags: [python, "defect:graph-resolution", search-required, curated-snapshot]}

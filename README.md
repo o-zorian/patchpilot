@@ -145,9 +145,38 @@ patchpilot benchmark run benchmarks/local-v1 --output benchmark-results/all
 patchpilot benchmark compare benchmark-results/all/summary.json benchmarks/local-v1/results/full/summary.json
 ```
 
-The output directory must be absent or empty. Use `--repetitions 3` for a stochastic real-model
-research run only after implementing a separate approved benchmark adapter; the included Benchmark
-intentionally remains offline.
+The output directory must be absent or empty. This Scripted Benchmark remains offline and keeps its
+published behavior. Real-model experiments use the separate `real-*` commands and suites below.
+
+## Real Benchmark v1 (experimental; no published score)
+
+`benchmarks/real-calibration-v1` contains five non-scoring calibration tasks.
+`benchmarks/real-v1` is a frozen 24-task Python/Go curated-snapshot suite: 5 easy, 12 medium, and
+7 hard tasks across at least eight defect categories. It is independent of `local-v1`; no
+ScriptedModel result is treated as a real-model result. Validate both suites without an API call:
+
+```text
+patchpilot benchmark real-validate benchmarks/real-calibration-v1 --verify-fixtures --json
+patchpilot benchmark real-validate benchmarks/real-v1 --verify-fixtures --json
+```
+
+Paid commands require all three gates: `PATCHPILOT_ENABLE_REAL_MODEL=true`, a non-empty
+`MODEL_API_KEY`, and the command-line `--real-model` flag. Positive input/output pricing is also
+required so the global cost ceiling can be enforced. Run only calibration until the full 288-run
+matrix (24 tasks × 4 strategies × 3 repetitions) has an approved budget:
+
+```text
+patchpilot benchmark real-ping --real-model --max-total-cost-usd 0.02 --json
+patchpilot benchmark real-run benchmarks/real-calibration-v1 --output benchmark-results/real-calibration \
+  --real-model --max-total-cost-usd 0.60 --strategy full --repetitions 1 --concurrency 1 --json
+patchpilot benchmark real-estimate benchmarks/real-v1 \
+  --calibration-raw benchmark-results/real-calibration/raw.jsonl --json
+```
+
+Completed runs are persisted immediately and skipped on resume. A request interrupted after it was
+sent is recorded as unknown billed cost and is not automatically retried as a new paid Run. See
+[`docs/real-benchmark-v1.md`](docs/real-benchmark-v1.md) for the protocol, artifacts, freeze rules,
+and audit checklist. No formal real-model pass rate is published in this repository.
 
 ## Explicit real-model demo
 
@@ -168,6 +197,8 @@ PATCHPILOT_ENABLE_REAL_MODEL=true
 MODEL_BASE_URL=https://api.openai.com/v1
 MODEL_API_KEY=<set-only-in-your-shell-or-secret-manager>
 MODEL_NAME=<openai-compatible-model-name>
+MODEL_INPUT_COST_PER_MILLION_USD=<provider-input-price>
+MODEL_OUTPUT_COST_PER_MILLION_USD=<provider-output-price>
 SANDBOX_MODE=docker
 ```
 

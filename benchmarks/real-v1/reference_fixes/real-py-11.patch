@@ -1,0 +1,36 @@
+diff --git a/realbench/resolver.py b/realbench/resolver.py
+--- a/realbench/resolver.py
++++ b/realbench/resolver.py
+@@ -5,16 +5,29 @@ from realbench.models import Dependency
+ 
+ def resolve_dependencies(roots: list[str], catalog: dict[str, Dependency]) -> list[str]:
+     resolved: list[str] = []
++    visiting: set[str] = set()
+ 
+-    def visit(name: str) -> None:
++    def visit(name: str) -> bool:
++        if name in resolved:
++            return True
++        if name in visiting:
++            raise ValueError(f"dependency cycle at {name}")
+         dependency = catalog[name]
++        visiting.add(name)
+         for required in dependency.requires:
+-            visit(required)
+-        if name not in resolved:
+-            resolved.append(name)
++            if required not in catalog:
++                visiting.remove(name)
++                if dependency.optional:
++                    return False
++                raise ValueError(f"missing dependency {required}")
++            if not visit(required) and dependency.optional:
++                visiting.remove(name)
++                return False
++        visiting.remove(name)
++        resolved.append(name)
++        return True
+ 
+     for root in roots:
+         visit(root)
+     return resolved

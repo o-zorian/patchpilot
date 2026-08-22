@@ -1,0 +1,14 @@
+version: "1"
+id: real-v1
+suite_kind: formal
+frozen: true
+task_glob: tasks/*.yaml
+source_registry: SOURCES.yaml
+strategies: [single_shot, agent_loop, agent_loop_with_tests, full]
+prompt_version: real-v1
+repetitions: 3
+concurrency: 1
+temperature: 0
+max_tokens: 4096
+scoring_rule: all_acceptance_must_pass
+retry_rule: transport_only_bounded_no_task_reruns

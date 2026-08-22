@@ -26,7 +26,18 @@ _REJECTED_PATCH_PREFIXES = (
 class ApplyPatchInput(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    patch: str = Field(min_length=1, max_length=1_000_000)
+    patch: str = Field(
+        min_length=1,
+        max_length=1_000_000,
+        description=(
+            "A complete Git unified diff. Start each file section with "
+            "'diff --git a/path b/path', followed by '--- a/path', '+++ b/path', "
+            "and at least one '@@' hunk. Do not use '*** Begin Patch', "
+            "'*** Update File', or '*** End Patch' markers. Example: "
+            "diff --git a/file.py b/file.py\n--- a/file.py\n+++ b/file.py\n"
+            "@@ -1 +1 @@\n-old\n+new"
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,0 +1,13 @@
+diff --git a/calibration.py b/calibration.py
+--- a/calibration.py
++++ b/calibration.py
+@@ -7,7 +7,8 @@ def clamp(value: int, lower: int, upper: int) -> int:
+ 
+ 
+ def normalize_email(value: str) -> str:
+-    return value.lower()
++    local, separator, domain = value.partition("@")
++    return local + separator + domain.lower()
+ 
+ 
+ def unique_tags(tags: list[str]) -> list[str]:

@@ -1,0 +1,28 @@
+diff --git a/registry/registry.go b/registry/registry.go
+--- a/registry/registry.go
++++ b/registry/registry.go
+@@ -1,7 +1,20 @@
+ package registry
+ 
+-type Registry struct{ values map[string]int }
++import "sync"
+ 
+-func New() *Registry                     { return &Registry{values: map[string]int{}} }
+-func (r *Registry) Increment(key string) { r.values[key]++ }
+-func (r *Registry) Value(key string) int { return r.values[key] }
++type Registry struct {
++	mu     sync.RWMutex
++	values map[string]int
++}
++
++func New() *Registry { return &Registry{values: map[string]int{}} }
++func (r *Registry) Increment(key string) {
++	r.mu.Lock()
++	defer r.mu.Unlock()
++	r.values[key]++
++}
++func (r *Registry) Value(key string) int {
++	r.mu.RLock()
++	defer r.mu.RUnlock()
++	return r.values[key]
++}

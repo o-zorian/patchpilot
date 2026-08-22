@@ -1,0 +1,11 @@
+version: "1"
+id: real-py-05
+title: Parse both Retry-After wire formats
+repository: {path: repos/python-service, base_ref: main, language: python}
+goal: parse_retry_after must support non-negative delta seconds and RFC-style HTTP dates relative to the supplied timezone-aware now. Past dates clamp to zero. Reuse the clock helper and do not access the network or system clock.
+allowed_paths: [realbench/parsing.py, realbench/clock.py]
+denied_paths: [.git/**, tests/**]
+acceptance: {commands: [{argv: [python, -m, pytest, tests/py05], timeout_seconds: 45}], required_tests: [test_numeric_retry_after, test_http_date_retry_after]}
+budget: {max_steps: 20, max_input_tokens: 120000, max_output_tokens: 24000, max_cost_usd: 0.25, max_wall_time_seconds: 600, max_changed_files: 2, max_patch_lines: 160}
+execution: {network: false, cpu_limit: 2, memory_limit_mb: 768}
+metadata: {difficulty: medium, tags: [python, "defect:protocol-parsing", multi-file, curated-snapshot]}

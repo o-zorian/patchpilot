@@ -1,0 +1,11 @@
+version: "1"
+id: real-py-12
+title: Make event deduplication atomic under concurrency
+repository: {path: repos/python-service, base_ref: main, language: python}
+goal: EventProcessor.apply must atomically decide, execute, and record an event so concurrent duplicates run the effect exactly once. Distinct event IDs must each apply once. Preserve the boolean return contract.
+allowed_paths: [realbench/events.py]
+denied_paths: [.git/**, tests/**]
+acceptance: {commands: [{argv: [python, -m, pytest, tests/py12], timeout_seconds: 60}], required_tests: [test_duplicate_event_effect_is_applied_once_under_concurrency]}
+budget: {max_steps: 20, max_input_tokens: 120000, max_output_tokens: 24000, max_cost_usd: 0.25, max_wall_time_seconds: 600, max_changed_files: 1, max_patch_lines: 160}
+execution: {network: false, cpu_limit: 2, memory_limit_mb: 768}
+metadata: {difficulty: hard, tags: [python, "defect:concurrency-state", regression-risk, curated-snapshot]}

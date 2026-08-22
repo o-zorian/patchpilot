@@ -63,6 +63,9 @@ def test_ci_cannot_enable_or_receive_a_real_model_credential() -> None:
     assert 'PATCHPILOT_ENABLE_REAL_MODEL: "false"' in workflow
     assert 'MODEL_API_KEY: ""' in workflow
     assert "patchpilot benchmark run" in workflow
+    assert "patchpilot benchmark real-validate" in workflow
+    assert "patchpilot benchmark real-run" not in workflow
+    assert "patchpilot benchmark real-ping" not in workflow
 
 
 def test_release_compose_defines_healthy_postgres_and_redis_only() -> None:

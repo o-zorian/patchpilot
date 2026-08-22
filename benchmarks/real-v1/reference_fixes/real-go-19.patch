@@ -1,0 +1,10 @@
+diff --git a/retry/retry.go b/retry/retry.go
+--- a/retry/retry.go
++++ b/retry/retry.go
+@@ -5,5 +5,5 @@ import "errors"
+ var ErrTemporary = errors.New("temporary")
+ 
+ func ShouldRetry(err error) bool {
+-	return err == ErrTemporary
++	return errors.Is(err, ErrTemporary)
+ }

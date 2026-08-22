@@ -1,0 +1,19 @@
+diff --git a/safepath/path.go b/safepath/path.go
+--- a/safepath/path.go
++++ b/safepath/path.go
+@@ -3,13 +3,13 @@ package safepath
+ import (
+ 	"fmt"
+ 	"path/filepath"
+-	"strings"
+ )
+ 
+ func Join(root, name string) (string, error) {
+ 	root, _ = filepath.Abs(root)
+ 	candidate, _ := filepath.Abs(filepath.Join(root, name))
+-	if !strings.HasPrefix(candidate, root) {
++	relative, err := filepath.Rel(root, candidate)
++	if err != nil || relative == ".." || filepath.IsAbs(relative) || (len(relative) > 3 && relative[:3] == ".."+string(filepath.Separator)) {
+ 		return "", fmt.Errorf("path escapes root")
+ 	}
+ 	return candidate, nil

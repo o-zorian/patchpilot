@@ -37,7 +37,7 @@ from patchpilot.persistence.database import Database
 from patchpilot.persistence.migrations import upgrade_database
 from patchpilot.persistence.models import ArtifactRow
 from patchpilot.persistence.repositories import RunRepository
-from patchpilot.quality.gate import QualityGate
+from patchpilot.quality.gate import HiddenTestInjection, QualityGate
 from patchpilot.sandbox.trusted_local import TrustedLocalSandbox
 from patchpilot.sandbox.workspace import WorkspaceManager
 from patchpilot.tools.base import ToolContext, ToolLimits
@@ -134,6 +134,7 @@ def build_quality_loop(
     *,
     database: Database | None = None,
     configure_context: Callable[[ToolContext], object] | None = None,
+    hidden_test: HiddenTestInjection | None = None,
 ) -> tuple[AgentLoop, InMemoryEventSink, ArtifactStore]:
     if configure_context is not None:
         configure_context(context)
@@ -151,6 +152,7 @@ def build_quality_loop(
         context=context,
         events=events,
         artifacts=artifacts,
+        hidden_test=hidden_test,
     )
     loop = AgentLoop(
         model_client=client,
@@ -286,6 +288,60 @@ async def test_gate_failure_feedback_allows_second_fix(
     event_types = [event.type for event in memory.events]
     assert event_types.count(EventType.QUALITY_GATE_FAILED) == 1
     assert event_types.count(EventType.QUALITY_GATE_PASSED) == 1
+
+
+@pytest.mark.asyncio
+async def test_hidden_test_names_and_assertions_never_enter_model_feedback(
+    tmp_path: Path,
+    valid_task_data: dict[str, Any],
+) -> None:
+    context, _ = make_context(tmp_path, valid_task_data)
+    hidden_source = tmp_path / "hidden_secret_test.py"
+    hidden_source.write_text(
+        "from calculator import add\n\n"
+        "def test_hidden_sentinel_name() -> None:\n"
+        "    assert add(2, 3) == 987654321\n",
+        encoding="utf-8",
+    )
+
+    def inspect_redacted_feedback(
+        messages: list[Message],
+        _: list[ToolSchema],
+        __: ModelConfig,
+    ) -> ModelResponse:
+        raw = messages[-1].content or ""
+        feedback = json.loads(raw)
+        assert feedback["failed_tests"] == []
+        assert "hidden details" in feedback["summary"]
+        assert "test_hidden_sentinel_name" not in raw
+        assert "987654321" not in raw
+        return response(finish("retry-finish"))
+
+    client = ScriptedModelClient(
+        [
+            response(patch_call("fix-public", "left - right", "left + right")),
+            response(finish("initial-finish")),
+            inspect_redacted_feedback,
+            response(finish("terminal-finish")),
+        ]
+    )
+    run_id = uuid4()
+    loop, _, _ = build_quality_loop(
+        context,
+        client,
+        run_id,
+        tmp_path / "artifacts",
+        hidden_test=HiddenTestInjection(
+            source=hidden_source,
+            target="tests/test_hidden_injected.py",
+        ),
+    )
+
+    result = await loop.run(run_id)
+    client.assert_exhausted()
+
+    assert result.status == AgentLoopStatus.FAILED
+    assert not (context.workspace.path / "tests/test_hidden_injected.py").exists()
 
 
 @pytest.mark.asyncio

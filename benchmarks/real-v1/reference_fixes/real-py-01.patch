@@ -1,0 +1,13 @@
+diff --git a/realbench/paths.py b/realbench/paths.py
+--- a/realbench/paths.py
++++ b/realbench/paths.py
+@@ -7,6 +7,6 @@ def safe_join(root: Path, user_path: str) -> Path:
+     """Return a resolved child path or raise ValueError for traversal."""
+ 
+-    candidate = (root / user_path).resolve()
+-    if not str(candidate).startswith(str(root.resolve())):
++    resolved_root = root.resolve()
++    candidate = (resolved_root / user_path).resolve()
++    if not candidate.is_relative_to(resolved_root):
+         raise ValueError("path escapes root")
+     return candidate

@@ -1,0 +1,26 @@
+diff --git a/realbench/storage.py b/realbench/storage.py
+--- a/realbench/storage.py
++++ b/realbench/storage.py
+@@ -39,3 +39,6 @@ class AccountStore:
+ 
+     def snapshot(self) -> dict[str, Account]:
+         return deepcopy(self.accounts)
++
++    def restore(self, snapshot: dict[str, Account]) -> None:
++        self.accounts = deepcopy(snapshot)
+diff --git a/realbench/services.py b/realbench/services.py
+--- a/realbench/services.py
++++ b/realbench/services.py
+@@ -27,5 +27,10 @@ class UserService:
+ 
+ 
+ def transfer(store: AccountStore, source: str, target: str, amount: int) -> None:
+-    store.debit(source, amount)
+-    store.credit(target, amount)
++    snapshot = store.snapshot()
++    try:
++        store.debit(source, amount)
++        store.credit(target, amount)
++    except Exception:
++        store.restore(snapshot)
++        raise

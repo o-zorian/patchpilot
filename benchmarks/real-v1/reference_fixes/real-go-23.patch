@@ -1,0 +1,37 @@
+diff --git a/ledger/store.go b/ledger/store.go
+--- a/ledger/store.go
++++ b/ledger/store.go
+@@ -22,3 +22,15 @@ func (s *Store) Credit(id string, amount int) error {
+ 	s.Balances[id] += amount
+ 	return nil
+ }
++
++func (s *Store) Snapshot() map[string]int {
++	copy := map[string]int{}
++	for id, balance := range s.Balances {
++		copy[id] = balance
++	}
++	return copy
++}
++
++func (s *Store) Restore(snapshot map[string]int) {
++	s.Balances = snapshot
++}
+diff --git a/ledger/transfer.go b/ledger/transfer.go
+--- a/ledger/transfer.go
++++ b/ledger/transfer.go
+@@ -1,8 +1,13 @@
+ package ledger
+ 
+ func Transfer(store *Store, source, target string, amount int) error {
++	snapshot := store.Snapshot()
+ 	if err := store.Debit(source, amount); err != nil {
+ 		return err
+ 	}
+-	return store.Credit(target, amount)
++	if err := store.Credit(target, amount); err != nil {
++		store.Restore(snapshot)
++		return err
++	}
++	return nil
+ }

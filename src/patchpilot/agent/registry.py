@@ -189,7 +189,11 @@ def build_default_registry(
     if enabled("apply_patch"):
         registry.register(
             "apply_patch",
-            "Atomically apply a scoped, budgeted unified text patch.",
+            (
+                "Atomically apply a scoped, budgeted Git unified diff. The patch must use "
+                "diff --git, ---/+++, and @@ headers; Codex-style *** Begin Patch markers "
+                "are invalid."
+            ),
             ApplyPatchInput,
             lambda arguments, _: apply_patch.execute(arguments),
         )

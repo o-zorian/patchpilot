@@ -1,0 +1,11 @@
+version: "1"
+id: cal-go-01
+title: Handle a zero-count average
+repository: {path: repos/calibration, base_ref: main, language: go}
+goal: Average must return zero for count zero and preserve integer division for positive counts.
+allowed_paths: [calcmath/calc.go]
+denied_paths: [.git/**, "**/*_test.go"]
+acceptance: {commands: [{argv: [go, test, ./calcmath], timeout_seconds: 30}], required_tests: [TestAverageZeroCount]}
+budget: {max_steps: 12, max_input_tokens: 60000, max_output_tokens: 10000, max_cost_usd: 0.12, max_wall_time_seconds: 300, max_changed_files: 1, max_patch_lines: 80}
+execution: {network: false, cpu_limit: 1, memory_limit_mb: 512}
+metadata: {difficulty: easy, tags: [go, "defect:error-handling", calibration]}

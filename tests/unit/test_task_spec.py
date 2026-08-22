@@ -56,10 +56,26 @@ def test_accepts_bounded_go_test_and_vet_commands(valid_task_data: dict[str, Any
     assert spec.acceptance.commands[0].argv == ["go", "test", "./..."]
 
 
+def test_accepts_go_race_detector_without_general_flag_passthrough(
+    valid_task_data: dict[str, Any],
+) -> None:
+    valid_task_data["repository"]["language"] = "go"
+    valid_task_data["acceptance"] = {
+        "commands": [{"argv": ["go", "test", "-race", "./registry"], "timeout_seconds": 60}],
+        "required_tests": ["TestConcurrentIncrement"],
+    }
+
+    spec = TaskSpec.model_validate(valid_task_data)
+
+    assert spec.acceptance.commands[0].argv == ["go", "test", "-race", "./registry"]
+
+
 @pytest.mark.parametrize(
     "argv",
     [
         ["go", "test", "-run", "TestOnly"],
+        ["go", "vet", "-race", "./..."],
+        ["go", "test", "./...", "-race"],
         ["go", "test", "../outside"],
         ["go", "get", "example.com/dependency"],
         ["sh", "-c", "go test ./..."],

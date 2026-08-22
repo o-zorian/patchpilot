@@ -1,0 +1,9 @@
+diff --git a/calibration.py b/calibration.py
+--- a/calibration.py
++++ b/calibration.py
+@@ -11,4 +11,4 @@ def normalize_email(value: str) -> str:
+ 
+ 
+ def unique_tags(tags: list[str]) -> list[str]:
+-    return sorted(set(tags))
++    return list(dict.fromkeys(tags))

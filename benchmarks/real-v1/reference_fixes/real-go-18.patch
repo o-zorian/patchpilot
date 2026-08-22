@@ -1,0 +1,48 @@
+diff --git a/pagetoken/encode.go b/pagetoken/encode.go
+--- a/pagetoken/encode.go
++++ b/pagetoken/encode.go
+@@ -1,7 +1,11 @@
+ package pagetoken
+ 
+-import "encoding/base64"
++import (
++	"encoding/base64"
++	"net/url"
++)
+ 
+ func Encode(tenant, cursor string) string {
+-	return base64.RawURLEncoding.EncodeToString([]byte(tenant + ":" + cursor))
++	payload := url.QueryEscape(tenant) + "&" + url.QueryEscape(cursor)
++	return base64.RawURLEncoding.EncodeToString([]byte(payload))
+ }
+diff --git a/pagetoken/decode.go b/pagetoken/decode.go
+--- a/pagetoken/decode.go
++++ b/pagetoken/decode.go
+@@ -3,6 +3,7 @@ package pagetoken
+ import (
+ 	"encoding/base64"
+ 	"fmt"
++	"net/url"
+ 	"strings"
+ )
+ 
+@@ -11,9 +12,17 @@ func Decode(token string) (string, string, error) {
+ 	if err != nil {
+ 		return "", "", err
+ 	}
+-	parts := strings.Split(string(raw), ":")
++	parts := strings.SplitN(string(raw), "&", 2)
+ 	if len(parts) != 2 {
+ 		return "", "", fmt.Errorf("invalid token")
+ 	}
+-	return parts[0], parts[1], nil
++	tenant, err := url.QueryUnescape(parts[0])
++	if err != nil {
++		return "", "", err
++	}
++	cursor, err := url.QueryUnescape(parts[1])
++	if err != nil {
++		return "", "", err
++	}
++	return tenant, cursor, nil
+ }

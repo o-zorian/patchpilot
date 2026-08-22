@@ -20,6 +20,7 @@ from patchpilot.agent.events import (
 )
 from patchpilot.agent.loop import AgentLoop, AgentLoopStatus
 from patchpilot.agent.registry import build_default_registry
+from patchpilot.agent.strategies import policy_for
 from patchpilot.domain.run import RunStrategy
 from patchpilot.domain.task import TaskSpec
 from patchpilot.models.base import (
@@ -219,6 +220,64 @@ async def test_agent_loop_repairs_only_workspace_and_records_jsonl(
     assert "return left + right" not in jsonl_path.read_text(encoding="utf-8")
     test_feedback = json.loads(client.calls[3].messages[-1].content or "{}")
     assert test_feedback["data"]["passed"] is True
+
+
+@pytest.mark.asyncio
+async def test_context_compaction_never_sends_orphaned_tool_results(
+    tmp_path: Path,
+    valid_task_data: dict[str, Any],
+) -> None:
+    context, _ = make_context(tmp_path, valid_task_data)
+
+    def validate_protocol_suffix(
+        messages: list[Message],
+        _: list[ToolSchema],
+        __: ModelConfig,
+    ) -> ModelResponse:
+        observed_call_ids: set[str] = set()
+        for message in messages:
+            observed_call_ids.update(call.id for call in message.tool_calls)
+            if message.role.value == "tool":
+                assert message.tool_call_id in observed_call_ids
+        assert messages[3].role.value != "tool"
+        return response(
+            call(
+                "finish-after-compaction",
+                "finish",
+                {"summary": "protocol valid", "tests_run": [], "remaining_risks": []},
+            )
+        )
+
+    single_reads = [
+        response(call(f"read-{index}", "read_file", {"path": "calculator.py"}))
+        for index in range(1, 5)
+    ]
+    client = ScriptedModelClient(
+        [
+            *single_reads,
+            response(
+                call("read-five-a", "read_file", {"path": "calculator.py"}),
+                call("read-five-b", "read_file", {"path": "tests/test_calculator.py"}),
+            ),
+            validate_protocol_suffix,
+        ]
+    )
+    run_id = uuid4()
+    memory = InMemoryEventSink()
+    loop = AgentLoop(
+        model_client=client,
+        model_config=config(),
+        tool_context=context,
+        registry=build_default_registry(context),
+        events=EventEmitter(run_id, [memory]),
+        strategy_policy=policy_for(RunStrategy.FULL),
+    )
+
+    result = await loop.run(run_id)
+    client.assert_exhausted()
+
+    assert result.status == AgentLoopStatus.FINISH_REQUESTED
+    assert EventType.CONTEXT_COMPACTED in {event.type for event in memory.events}
 
 
 @pytest.mark.asyncio

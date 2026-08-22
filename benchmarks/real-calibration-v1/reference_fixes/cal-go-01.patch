@@ -1,0 +1,9 @@
+diff --git a/calcmath/calc.go b/calcmath/calc.go
+--- a/calcmath/calc.go
++++ b/calcmath/calc.go
+@@ -2,5 +2,6 @@ package calcmath
+ 
+ func Average(total, count int) int {
++	if count == 0 { return 0 }
+ 	return total / count
+ }
